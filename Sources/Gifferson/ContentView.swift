@@ -397,6 +397,7 @@ struct EmptyPreview: View {
                 .background(AppColor.control)
                 .clipShape(Capsule())
                 .contentShape(Capsule())
+                .pointingHandCursor()
                 .onTapGesture(perform: onAddFrames)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -480,6 +481,7 @@ struct TimelineStrip: View {
                         .background(AppColor.control)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .pointingHandCursor()
                         .onTapGesture(perform: onAddFrames)
                     } else {
                         ForEach(model.frames) { frame in
@@ -509,6 +511,7 @@ struct TimelineStrip: View {
                             .background(AppColor.control)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .pointingHandCursor()
                             .onTapGesture(perform: onAddFrames)
                     }
                 }
@@ -659,10 +662,14 @@ struct FrameCard: View {
                 .stroke(isSelected ? AppColor.pink : AppColor.panelBorder, lineWidth: isSelected ? 2 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .dragHandleCursor(isDragging: model.draggingFrameID == frame.id)
         .onTapGesture {
             model.select(frame)
         }
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            isHovering = hovering
+            updateFrameCursor(isHovering: hovering)
+        }
         .gesture(reorderDragGesture)
         .zIndex(model.draggingFrameID == frame.id ? 1 : 0)
     }
@@ -674,11 +681,27 @@ struct FrameCard: View {
                     model.draggingFrameID = frame.id
                     model.select(frame)
                 }
+                TimelineCursorState.isDraggingFrame = true
+                NSCursor.closedHand.set()
                 onDragLocation(value.location.x)
             }
             .onEnded { _ in
+                TimelineCursorState.isDraggingFrame = false
                 onDragEnded()
+                updateFrameCursor(isHovering: isHovering)
             }
+    }
+
+    private func updateFrameCursor(isHovering: Bool) {
+        if model.draggingFrameID == frame.id {
+            NSCursor.closedHand.set()
+        } else if TimelineCursorState.isDraggingFrame {
+            NSCursor.closedHand.set()
+        } else if isHovering {
+            NSCursor.openHand.set()
+        } else {
+            NSCursor.arrow.set()
+        }
     }
 
     private func fittedImageRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
@@ -713,6 +736,7 @@ struct FrameDurationMenu: View {
     var body: some View {
         durationBadge
             .contentShape(Capsule())
+            .pointingHandCursor()
             .onTapGesture {
                 isShowingMenu = true
             }
@@ -778,6 +802,7 @@ struct FrameDurationPopover: View {
             .background(optionBackground(title))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .pointingHandCursor()
             .onHover { isHovering in
                 hoveredOption = isHovering ? title : nil
             }
@@ -821,6 +846,7 @@ struct DeleteFrameButton: View {
             .background(.black.opacity(0.54))
             .clipShape(Circle())
             .contentShape(Circle())
+            .pointingHandCursor()
             .onTapGesture(perform: action)
     }
 }
@@ -846,6 +872,7 @@ struct SettingsStrip: View {
     @Binding var appearance: AppAppearance
 
     private let loopModes: [GIFLoopMode] = [.infinite, .once, .count(2), .count(3), .count(5)]
+    private let rowPadding: CGFloat = 10
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -900,12 +927,9 @@ struct SettingsStrip: View {
                     }
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 9)
+            .padding(rowPadding)
         }
         .frame(height: 62)
-        .background(AppColor.settingsBar)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -916,23 +940,23 @@ struct CompactMenuControl<MenuContent: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(AppColor.secondaryText)
-                .lineLimit(1)
+            SettingsControlLabel(title)
 
             Menu {
                 menuContent()
             } label: {
-                HStack(spacing: 5) {
+                HStack {
                     Text(value)
                         .lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(AppColor.secondaryText)
                 }
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(AppColor.primaryText)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background(AppColor.control)
+                .clipShape(Capsule())
+                .contentShape(Capsule())
+                .pointingHandCursor()
             }
             .buttonStyle(.plain)
         }
@@ -945,9 +969,7 @@ struct SizeControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Size")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(AppColor.secondaryText)
+            SettingsControlLabel("Size")
 
             HStack(spacing: 5) {
                 CompactNumberField(value: Binding(get: { model.width }, set: { model.setWidth($0) }))
@@ -962,12 +984,30 @@ struct SizeControl: View {
                     .background(AppColor.control)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .pointingHandCursor()
                     .onTapGesture {
                         model.setLockAspectRatio(!model.lockAspectRatio)
                     }
             }
         }
         .frame(width: 174, alignment: .leading)
+    }
+}
+
+struct SettingsControlLabel: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(AppColor.secondaryText)
+            .lineLimit(1)
+            .padding(.leading, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1022,6 +1062,7 @@ struct HeaderActionPill: View {
         .clipShape(Capsule())
         .contentShape(Capsule())
         .opacity(isDisabled ? 0.72 : 1)
+        .pointingHandCursor(isEnabled: !isDisabled)
         .onTapGesture {
             guard !isDisabled else { return }
             action()
@@ -1051,6 +1092,7 @@ struct CircleIconButton: View {
             .background(disabled ? AppColor.controlDisabled : (isPrimary ? AppColor.pink : AppColor.control))
             .clipShape(Circle())
             .contentShape(Circle())
+            .pointingHandCursor(isEnabled: !disabled)
             .onTapGesture {
                 guard !disabled else { return }
                 action()
@@ -1069,34 +1111,162 @@ struct DurationPreset: Identifiable {
     }
 }
 
+private extension View {
+    func pointingHandCursor(isEnabled: Bool = true) -> some View {
+        background(CursorArea(cursor: .pointingHand, isEnabled: isEnabled).allowsHitTesting(false))
+    }
+
+    func dragHandleCursor(isDragging: Bool) -> some View {
+        overlay(
+            CursorTrackingArea(cursor: isDragging ? .closedHand : .openHand)
+                .allowsHitTesting(false)
+        )
+    }
+}
+
+private enum TimelineCursorState {
+    static var isDraggingFrame = false
+}
+
+private struct CursorTrackingArea: NSViewRepresentable {
+    let cursor: NSCursor
+
+    func makeNSView(context: Context) -> CursorTrackingView {
+        let view = CursorTrackingView()
+        view.cursor = cursor
+        return view
+    }
+
+    func updateNSView(_ view: CursorTrackingView, context: Context) {
+        view.cursor = cursor
+    }
+
+    final class CursorTrackingView: NSView {
+        var cursor = NSCursor.arrow {
+            didSet {
+                discardCursorRects()
+                window?.invalidateCursorRects(for: self)
+                if isMouseInside {
+                    cursor.set()
+                }
+            }
+        }
+
+        private var trackingArea: NSTrackingArea?
+        private var isMouseInside = false
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+            }
+
+            let trackingArea = NSTrackingArea(
+                rect: .zero,
+                options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
+                owner: self
+            )
+            addTrackingArea(trackingArea)
+            self.trackingArea = trackingArea
+        }
+
+        override func resetCursorRects() {
+            super.resetCursorRects()
+            addCursorRect(bounds, cursor: cursor)
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            isMouseInside = true
+            activeCursor.set()
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            activeCursor.set()
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            isMouseInside = false
+            activeCursor.set()
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        private var activeCursor: NSCursor {
+            TimelineCursorState.isDraggingFrame ? .closedHand : cursor
+        }
+    }
+}
+
+private struct CursorArea: NSViewRepresentable {
+    let cursor: NSCursor
+    let isEnabled: Bool
+
+    func makeNSView(context: Context) -> CursorRectView {
+        let view = CursorRectView()
+        view.cursor = cursor
+        view.isEnabled = isEnabled
+        return view
+    }
+
+    func updateNSView(_ view: CursorRectView, context: Context) {
+        view.cursor = cursor
+        view.isEnabled = isEnabled
+    }
+
+    final class CursorRectView: NSView {
+        var cursor = NSCursor.arrow {
+            didSet { invalidateCursorRects() }
+        }
+
+        var isEnabled = true {
+            didSet { invalidateCursorRects() }
+        }
+
+        override func resetCursorRects() {
+            super.resetCursorRects()
+
+            if isEnabled {
+                addCursorRect(bounds, cursor: cursor)
+            }
+        }
+
+        private func invalidateCursorRects() {
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+}
+
 enum AppColor {
-    static let window = adaptive(light: 0.95, dark: 0.075)
-    static let previewBackdrop = adaptive(light: 0.93, dark: 0.082)
-    static let timelineBackground = adaptive(light: 0.90, dark: 0.13)
-    static let settingsBar = adaptive(light: 0.985, dark: 0.14)
-    static let frameBackground = adaptive(light: 0.98, dark: 0.18)
+    static let window = adaptive(light: 0.95, dark: 0.035)
+    static let previewBackdrop = adaptive(light: 0.93, dark: 0.04)
+    static let timelineBackground = adaptive(light: 0.90, dark: 0.055)
+    static let settingsBar = adaptive(light: 0.985, dark: 0.06)
+    static let frameBackground = adaptive(light: 0.98, dark: 0.07)
     static let selectedFrame = adaptive(
         light: NSColor(calibratedRed: 1.0, green: 0.90, blue: 0.96, alpha: 1),
-        dark: NSColor(calibratedRed: 0.22, green: 0.12, blue: 0.18, alpha: 1)
+        dark: NSColor(calibratedRed: 0.12, green: 0.065, blue: 0.10, alpha: 1)
     )
-    static let control = adaptive(light: 0.88, dark: 0.24)
-    static let controlPressed = adaptive(light: 0.82, dark: 0.30)
-    static let controlDisabled = adaptive(light: 0.78, dark: 0.18)
-    static let separator = adaptive(light: 0.76, dark: 0.29).opacity(0.62)
-    static let panelBorder = adaptive(light: 0.70, dark: 0.32).opacity(0.56)
+    static let control = adaptive(light: 0.88, dark: 0.09)
+    static let controlPressed = adaptive(light: 0.82, dark: 0.115)
+    static let controlDisabled = adaptive(light: 0.78, dark: 0.065)
+    static let separator = adaptive(light: 0.76, dark: 0.105).opacity(0.54)
+    static let panelBorder = adaptive(light: 0.70, dark: 0.115).opacity(0.48)
     static let floatingBar = adaptive(
         light: NSColor(calibratedWhite: 0.985, alpha: 0.94),
-        dark: NSColor(calibratedWhite: 0.16, alpha: 0.94)
+        dark: NSColor(calibratedWhite: 0.065, alpha: 0.94)
     )
-    static let primaryText = adaptive(light: 0.08, dark: 0.91)
-    static let secondaryText = adaptive(light: 0.40, dark: 0.64)
-    static let disabledText = adaptive(light: 0.55, dark: 0.42)
+    static let primaryText = adaptive(light: 0.08, dark: 0.86)
+    static let secondaryText = adaptive(light: 0.40, dark: 0.52)
+    static let disabledText = adaptive(light: 0.55, dark: 0.30)
     static let pink = Color(nsColor: NSColor(calibratedRed: 0.96, green: 0.24, blue: 0.65, alpha: 1))
     static let orange = Color(nsColor: NSColor(calibratedRed: 1.0, green: 0.43, blue: 0.22, alpha: 1))
     static let yellow = Color(nsColor: NSColor(calibratedRed: 0.96, green: 0.68, blue: 0.08, alpha: 1))
     static let blue = Color(nsColor: NSColor(calibratedRed: 0.28, green: 0.52, blue: 0.98, alpha: 1))
     static let purple = Color(nsColor: NSColor(calibratedRed: 0.56, green: 0.36, blue: 0.96, alpha: 1))
-    static let grayIcon = adaptive(light: 0.50, dark: 0.36)
+    static let grayIcon = adaptive(light: 0.50, dark: 0.26)
 
     private static func adaptive(light: CGFloat, dark: CGFloat) -> Color {
         adaptive(
