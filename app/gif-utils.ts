@@ -268,6 +268,13 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
       }
     };
 
-    worker.postMessage({ type: "start", width, height, repeat, quality: gifskiQuality });
+    worker.postMessage({
+      type: "start",
+      width,
+      height,
+      frameCount: frames.length,
+      repeat,
+      quality: gifskiQuality,
+    });
   });
 }

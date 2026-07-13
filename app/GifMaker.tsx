@@ -463,7 +463,7 @@ export default function GifMaker() {
 
           <div className="compact-control encoder-control">
             <span>Encoder</span>
-            <b>Gifski</b>
+            <b title="Gifski primary, with an exact-size fallback above the browser WASM limit">Gifski · Exact</b>
           </div>
 
           <div className="settings-spacer" />
