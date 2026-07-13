@@ -1,26 +1,25 @@
 "use client";
 
 import {
-  Clock3,
+  ChevronDown,
   Download,
   ImagePlus,
-  Layers3,
   Lock,
+  Moon,
   Pause,
   Play,
   Plus,
-  Ratio,
-  ShieldCheck,
   SkipBack,
   SkipForward,
+  Sun,
   Trash2,
   Unlock,
-  Upload,
   X,
 } from "lucide-react";
 import {
   ChangeEvent,
   DragEvent,
+  WheelEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -82,6 +81,7 @@ export default function GifMaker() {
   const [loop, setLoop] = useState<LoopMode>("forever");
   const [quality, setQuality] = useState<QualityMode>("best");
   const [defaultDuration, setDefaultDuration] = useState(0.5);
+  const [durationDraft, setDurationDraft] = useState("0.5");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -89,12 +89,41 @@ export default function GifMaker() {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [previewArea, setPreviewArea] = useState({ width: 0, height: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const framesRef = useRef<GifFrame[]>([]);
+  const previewStageRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const dragScrollFrameRef = useRef<number | null>(null);
+  const dragScrollSpeedRef = useRef(0);
+
+  const toggleTheme = () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("gifferson-theme", nextTheme);
+  };
 
   useEffect(() => {
     framesRef.current = frames;
   }, [frames]);
+
+  useEffect(() => {
+    const stage = previewStageRef.current;
+    if (!stage) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const next = {
+        width: Math.max(0, entry.contentRect.width),
+        height: Math.max(0, entry.contentRect.height),
+      };
+      setPreviewArea((current) => (
+        Math.abs(current.width - next.width) < 1 && Math.abs(current.height - next.height) < 1
+          ? current
+          : next
+      ));
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -108,6 +137,16 @@ export default function GifMaker() {
   }, [frames, selectedId]);
   const selectedFrame = selectedIndex >= 0 ? frames[selectedIndex] : null;
   const totalDuration = frames.reduce((sum, frame) => sum + frame.duration, 0);
+  const previewDimensions = useMemo(() => {
+    if (!previewArea.width || !previewArea.height) return null;
+    const ratio = width / Math.max(1, height);
+    const availableWidth = previewArea.width * 0.96;
+    const availableHeight = previewArea.height * 0.96;
+    if (availableWidth / availableHeight > ratio) {
+      return { width: Math.floor(availableHeight * ratio), height: Math.floor(availableHeight) };
+    }
+    return { width: Math.floor(availableWidth), height: Math.floor(availableWidth / ratio) };
+  }, [height, previewArea, width]);
 
   const importFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -200,6 +239,21 @@ export default function GifMaker() {
     setFrames((current) => current.map((frame) => ({ ...frame, duration: safeDuration })));
   };
 
+  const updateDurationDraft = (value: string) => {
+    setDurationDraft(value);
+    const duration = Number(value);
+    if (value !== "" && Number.isFinite(duration) && duration >= 0.02) {
+      applyDefaultDuration(duration);
+    }
+  };
+
+  const commitDurationDraft = () => {
+    const duration = Number(durationDraft);
+    const safeDuration = Number.isFinite(duration) ? Math.max(0.02, duration) : defaultDuration;
+    setDurationDraft(String(safeDuration));
+    applyDefaultDuration(safeDuration);
+  };
+
   const updateWidth = (nextWidth: number) => {
     const safeWidth = Math.max(1, Math.round(nextWidth || 1));
     setWidth(safeWidth);
@@ -229,6 +283,59 @@ export default function GifMaker() {
       return next;
     });
   };
+
+  const stopTimelineAutoScroll = useCallback(() => {
+    dragScrollSpeedRef.current = 0;
+    if (dragScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragScrollFrameRef.current);
+      dragScrollFrameRef.current = null;
+    }
+  }, []);
+
+  const updateTimelineAutoScroll = (event: DragEvent<HTMLElement>) => {
+    const timeline = timelineRef.current;
+    if (!timeline || !draggingId || timeline.scrollWidth <= timeline.clientWidth) {
+      stopTimelineAutoScroll();
+      return;
+    }
+
+    const bounds = timeline.getBoundingClientRect();
+    const edgeSize = Math.min(96, Math.max(52, bounds.width * 0.16));
+    let speed = 0;
+    if (event.clientX < bounds.left + edgeSize) {
+      const intensity = Math.min(1, (bounds.left + edgeSize - event.clientX) / edgeSize);
+      speed = -(3 + intensity * 15);
+    } else if (event.clientX > bounds.right - edgeSize) {
+      const intensity = Math.min(1, (event.clientX - (bounds.right - edgeSize)) / edgeSize);
+      speed = 3 + intensity * 15;
+    }
+
+    dragScrollSpeedRef.current = speed;
+    if (!speed || dragScrollFrameRef.current !== null) return;
+
+    const scroll = () => {
+      const activeTimeline = timelineRef.current;
+      if (!activeTimeline || !dragScrollSpeedRef.current) {
+        dragScrollFrameRef.current = null;
+        return;
+      }
+      activeTimeline.scrollLeft += dragScrollSpeedRef.current;
+      dragScrollFrameRef.current = window.requestAnimationFrame(scroll);
+    };
+    dragScrollFrameRef.current = window.requestAnimationFrame(scroll);
+  };
+
+  const handleTimelineWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const timeline = event.currentTarget;
+    if (timeline.scrollWidth <= timeline.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+    const atStart = timeline.scrollLeft <= 0 && event.deltaY < 0;
+    const atEnd = timeline.scrollLeft + timeline.clientWidth >= timeline.scrollWidth - 1 && event.deltaY > 0;
+    if (atStart || atEnd) return;
+    event.preventDefault();
+    timeline.scrollLeft += event.deltaY;
+  };
+
+  useEffect(() => stopTimelineAutoScroll, [stopTimelineAutoScroll]);
 
   const handleExport = async () => {
     if (!frames.length || isExporting) return;
@@ -276,48 +383,82 @@ export default function GifMaker() {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Gifferson home">
-          <span className="brand-mark">G</span>
           <span>Gifferson</span>
         </a>
 
         <div className="stats" aria-label="Animation summary">
-          <span><Layers3 size={13} /> {frames.length} {frames.length === 1 ? "frame" : "frames"}</span>
-          <span><Ratio size={13} /> {width}×{height}</span>
-          <span><Clock3 size={13} /> {durationLabel(totalDuration)}</span>
+          <span>{frames.length} {frames.length === 1 ? "frame" : "frames"}</span>
+          <span>{width} × {height}</span>
+          <span>{durationLabel(totalDuration)}</span>
         </div>
 
         <div className="top-actions">
-          <button className="button button--ghost" type="button" onClick={() => inputRef.current?.click()}>
-            <Plus size={14} /> Add
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label="Toggle color theme"
+            title="Toggle color theme"
+            onClick={toggleTheme}
+          >
+            <Moon className="theme-icon theme-icon--moon" size={15} aria-hidden="true" />
+            <Sun className="theme-icon theme-icon--sun" size={15} aria-hidden="true" />
           </button>
+          <button
+            className="theme-toggle add-toggle"
+            type="button"
+            aria-label="Add frames"
+            title="Add frames"
+            onClick={() => inputRef.current?.click()}
+          >
+            <Plus size={15} aria-hidden="true" />
+          </button>
+          {frames.length > 0 && (
+            <button
+              className="theme-toggle delete-toggle"
+              type="button"
+              aria-label="Clear all frames"
+              title="Clear all frames"
+              onClick={clearAll}
+            >
+              <Trash2 size={15} aria-hidden="true" />
+            </button>
+          )}
           <button
             className="button button--primary"
             type="button"
+            aria-label="Export GIF"
+            title="Export GIF"
             disabled={!frames.length || isExporting}
             onClick={handleExport}
           >
             {isExporting ? <span className="spinner" /> : <Download size={14} />}
-            {isExporting ? `${Math.round(progress * 100)}%` : "Export"}
+            {isExporting ? `${Math.round(progress * 100)}%` : "Export GIF"}
           </button>
         </div>
       </header>
 
       <section
         className={`workspace${isDraggingOver ? " is-dragging" : ""}`}
-        onDragEnter={(event) => { event.preventDefault(); setIsDraggingOver(true); }}
-        onDragOver={(event) => event.preventDefault()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (event.dataTransfer.types.includes("Files")) setIsDraggingOver(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (draggingId) updateTimelineAutoScroll(event);
+        }}
         onDragLeave={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDraggingOver(false);
         }}
         onDrop={onDrop}
       >
-        <div className="preview-stage">
+        <div className="preview-stage" ref={previewStageRef}>
           {selectedFrame ? (
             <div
               className="preview-canvas"
               style={{
                 aspectRatio: `${width} / ${height}`,
-                width: `min(90%, calc((100dvh - 340px) * ${width / Math.max(1, height)}))`,
+                ...(previewDimensions ?? {}),
               }}
             >
               {/* User-selected blob URL; it never leaves this browser tab. */}
@@ -329,53 +470,48 @@ export default function GifMaker() {
               />
             </div>
           ) : (
-            <div className="empty-state">
-              <ImagePlus size={34} />
-              <strong>{isImporting ? "Preparing your frames…" : "Drop images here"}</strong>
-              <button type="button" onClick={() => inputRef.current?.click()}>
-                <Upload size={14} /> Add Frames
-              </button>
-            </div>
+            <button
+              className="empty-state"
+              type="button"
+              aria-label="Choose images. Supported formats: PNG, JPG, WebP, BMP, or GIF"
+              onClick={() => inputRef.current?.click()}
+            >
+              <span>{isImporting ? "Preparing images…" : "PNG, JPG, WebP, BMP, or GIF"}</span>
+            </button>
           )}
 
           {isDraggingOver && (
             <div className="drop-overlay">
               <ImagePlus size={30} />
-              <strong>Drop to add frames</strong>
+              <strong>Drop to add images</strong>
             </div>
           )}
 
-          <div className="playback">
-            <IconButton label="Previous frame" disabled={!frames.length} onClick={selectPrevious}>
-              <SkipBack size={15} fill="currentColor" />
-            </IconButton>
-            <IconButton
-              label={isPlaying ? "Pause preview" : "Play preview"}
-              disabled={!frames.length}
-              primary
-              onClick={() => setIsPlaying((current) => !current)}
-            >
-              {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-            </IconButton>
-            <IconButton label="Next frame" disabled={!frames.length} onClick={selectNext}>
-              <SkipForward size={15} fill="currentColor" />
-            </IconButton>
-            <span className="playback-count">
-              {selectedIndex >= 0 ? selectedIndex + 1 : 0} / {frames.length}
-            </span>
-          </div>
         </div>
 
         <div className="timeline-panel">
-          <div className={`timeline${frames.length ? "" : " is-empty"}`} aria-label="GIF frame timeline">
+          <div
+            ref={timelineRef}
+            className={`timeline${frames.length ? "" : " is-empty"}`}
+            aria-label="GIF frame timeline"
+            role="region"
+            tabIndex={0}
+            onWheel={handleTimelineWheel}
+          >
             {frames.map((frame, index) => (
               <article
                 key={frame.id}
                 className={`frame-card${frame.id === selectedFrame?.id ? " is-selected" : ""}${draggingId === frame.id ? " is-dragging" : ""}`}
-                style={{ flexBasis: Math.max(70, Math.round(112 * frame.width / Math.max(1, frame.height))) }}
+                style={{ flexBasis: Math.max(70, Math.round(106 * frame.width / Math.max(1, frame.height))) }}
                 draggable
-                onDragStart={() => setDraggingId(frame.id)}
-                onDragEnd={() => setDraggingId(null)}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  setDraggingId(frame.id);
+                }}
+                onDragEnd={() => {
+                  stopTimelineAutoScroll();
+                  setDraggingId(null);
+                }}
                 onDragOver={(event) => { event.preventDefault(); reorder(frame.id); }}
                 onClick={() => setSelectedId(frame.id)}
                 aria-label={`Frame ${index + 1}: ${frame.name}`}
@@ -413,22 +549,56 @@ export default function GifMaker() {
         </div>
 
         <div className="settings-strip">
+          <div className="compact-control playback-control">
+            <span>Playback</span>
+            <div className="playback" aria-label="Playback controls">
+              <IconButton label="Previous frame" disabled={!frames.length} onClick={selectPrevious}>
+                <SkipBack size={15} fill="currentColor" />
+              </IconButton>
+              <IconButton
+                label={isPlaying ? "Pause preview" : "Play preview"}
+                disabled={!frames.length}
+                primary
+                onClick={() => setIsPlaying((current) => !current)}
+              >
+                {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+              </IconButton>
+              <IconButton label="Next frame" disabled={!frames.length} onClick={selectNext}>
+                <SkipForward size={15} fill="currentColor" />
+              </IconButton>
+              <span className="playback-count">
+                {selectedIndex >= 0 ? selectedIndex + 1 : 0} / {frames.length}
+              </span>
+            </div>
+          </div>
+
           <label className="compact-control">
             <span>Duration</span>
-            <select value={defaultDuration} onChange={(event) => applyDefaultDuration(Number(event.target.value))}>
-              {[0.1, 0.2, 0.3, 0.5, 1, 2, 5].map((duration) => (
-                <option key={duration} value={duration}>{duration >= 1 ? `${duration}s` : `${duration.toFixed(1)}s`}</option>
-              ))}
-            </select>
+            <span className="number-field">
+              <input
+                aria-label="Default frame duration in seconds"
+                type="number"
+                inputMode="decimal"
+                min="0.02"
+                step="0.01"
+                value={durationDraft}
+                onChange={(event) => updateDurationDraft(event.target.value)}
+                onBlur={commitDurationDraft}
+              />
+              <i>s</i>
+            </span>
           </label>
 
           <label className="compact-control">
             <span>Loop</span>
-            <select value={loop} onChange={(event) => setLoop(event.target.value as LoopMode)}>
-              <option value="forever">Infinite</option>
-              <option value="once">Once</option>
-              <option value="three">3x</option>
-            </select>
+            <span className="select-field">
+              <select value={loop} onChange={(event) => setLoop(event.target.value as LoopMode)}>
+                <option value="forever">Infinite</option>
+                <option value="once">Once</option>
+                <option value="three">3x</option>
+              </select>
+              <ChevronDown size={13} aria-hidden="true" />
+            </span>
           </label>
 
           <div className="compact-control size-control">
@@ -438,41 +608,34 @@ export default function GifMaker() {
               <i>×</i>
               <input aria-label="Output height" type="number" min="1" max="8192" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
               <button type="button" onClick={toggleLock} aria-label={locked ? "Unlock aspect ratio" : "Lock aspect ratio"}>
-                {locked ? <Lock size={11} fill="currentColor" /> : <Unlock size={11} />}
+                {locked ? <Lock size={11} /> : <Unlock size={11} />}
               </button>
             </div>
           </div>
 
           <label className="compact-control">
             <span>Fit</span>
-            <select value={fit} onChange={(event) => setFit(event.target.value as FitMode)}>
-              <option value="fill">Fill</option>
-              <option value="fit">Fit</option>
-              <option value="stretch">Stretch</option>
-            </select>
+            <span className="select-field">
+              <select value={fit} onChange={(event) => setFit(event.target.value as FitMode)}>
+                <option value="fill">Fill</option>
+                <option value="fit">Fit</option>
+                <option value="stretch">Stretch</option>
+              </select>
+              <ChevronDown size={13} aria-hidden="true" />
+            </span>
           </label>
 
           <label className="compact-control">
             <span>Quality</span>
-            <select value={quality} onChange={(event) => setQuality(event.target.value as QualityMode)}>
-              <option value="best">Best</option>
-              <option value="balanced">Balanced</option>
-              <option value="compact">Compact</option>
-            </select>
+            <span className="select-field">
+              <select value={quality} onChange={(event) => setQuality(event.target.value as QualityMode)}>
+                <option value="best">Best</option>
+                <option value="balanced">Balanced</option>
+                <option value="compact">Compact</option>
+              </select>
+              <ChevronDown size={13} aria-hidden="true" />
+            </span>
           </label>
-
-          <div className="compact-control encoder-control">
-            <span>Encoder</span>
-            <b title="High-quality Gifski encoding with cross-frame palettes and temporal dithering">Gifski</b>
-          </div>
-
-          <div className="settings-spacer" />
-          <span className="privacy-compact"><ShieldCheck size={13} /> Local only</span>
-          {frames.length > 0 && (
-            <button className="clear-button" type="button" onClick={clearAll} title="Clear all frames">
-              <Trash2 size={13} />
-            </button>
-          )}
         </div>
       </section>
 

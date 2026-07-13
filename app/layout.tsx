@@ -15,20 +15,27 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Gifferson — Make a GIF in your browser",
       description: "Drop in images, tune the timing, and export. Nothing gets uploaded or saved.",
       type: "website",
-      images: [{ url: "/og.png", width: 1733, height: 907, alt: "Gifferson — Make a GIF. Leave no trace." }],
+      images: [{ url: "/og-v2.png", width: 1731, height: 909, alt: "Gifferson — Make a GIF. Leave no trace." }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Gifferson — Make a GIF in your browser",
       description: "Drop in images, tune the timing, and export. Nothing gets uploaded or saved.",
-      images: ["/og.png"],
+      images: ["/og-v2.png"],
     },
   };
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var saved=localStorage.getItem("gifferson-theme");var theme=saved==="light"||saved==="dark"?saved:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=theme;}catch(e){document.documentElement.dataset.theme="light";}})();`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
