@@ -503,6 +503,17 @@ a:focus-visible {
   padding: 0 9px;
 }
 
+.encoder-control b {
+  align-items: center;
+  background: var(--control);
+  border-radius: 999px;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 12px;
+  height: 27px;
+  padding: 0 12px;
+}
+
 .size-control {
   min-width: 176px;
 }

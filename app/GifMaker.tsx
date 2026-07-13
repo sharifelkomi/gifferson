@@ -112,6 +112,7 @@ export default function GifMaker() {
   const importFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
     if (!files.length) return;
+    const shouldApplyDetectedSize = framesRef.current.length === 0;
     setError(null);
     setIsImporting(true);
 
@@ -124,6 +125,13 @@ export default function GifMaker() {
         }));
         setFrames((current) => [...current, ...nextFrames]);
         setSelectedId((current) => current ?? nextFrames[0].id);
+        if (shouldApplyDetectedSize) {
+          const detectedWidth = nextFrames[0].width;
+          const detectedHeight = nextFrames[0].height;
+          setWidth(detectedWidth);
+          setHeight(detectedHeight);
+          setLockedRatio(detectedWidth / Math.max(1, detectedHeight));
+        }
       }
       if (rejected.length) {
         setError(
@@ -452,6 +460,11 @@ export default function GifMaker() {
               <option value="compact">Compact</option>
             </select>
           </label>
+
+          <div className="compact-control encoder-control">
+            <span>Encoder</span>
+            <b>Gifski</b>
+          </div>
 
           <div className="settings-spacer" />
           <span className="privacy-compact"><ShieldCheck size={13} /> Local only</span>

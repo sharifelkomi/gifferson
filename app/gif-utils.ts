@@ -208,7 +208,7 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
     type: "module",
   });
   const repeat = loop === "forever" ? 0 : loop === "once" ? -1 : 3;
-  const colors = quality === "best" ? 256 : quality === "balanced" ? 128 : 64;
+  const gifskiQuality = quality === "best" ? 100 : quality === "balanced" ? 85 : 65;
 
   return new Promise<Blob>((resolve, reject) => {
     let nextFrame = 0;
@@ -256,8 +256,10 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
         void sendNextFrame();
       } else if (message.type === "frame-done") {
         nextFrame = (message.index ?? nextFrame) + 1;
-        onProgress(nextFrame / frames.length);
+        onProgress((nextFrame / frames.length) * 0.5);
         void sendNextFrame();
+      } else if (message.type === "encoding") {
+        onProgress(0.55);
       } else if (message.type === "complete" && message.buffer) {
         worker.terminate();
         resolve(new Blob([message.buffer], { type: "image/gif" }));
@@ -266,6 +268,6 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
       }
     };
 
-    worker.postMessage({ type: "start", width, height, repeat, colors });
+    worker.postMessage({ type: "start", width, height, repeat, quality: gifskiQuality });
   });
 }

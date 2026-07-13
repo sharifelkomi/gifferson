@@ -1,13 +1,13 @@
 /// <reference lib="webworker" />
 
-import { applyPalette, GIFEncoder, quantize } from "gifenc";
+import gifskiEncode from "gifski-wasm";
 
 type StartMessage = {
   type: "start";
   width: number;
   height: number;
   repeat: number;
-  colors: number;
+  quality: number;
 };
 
 type FrameMessage = {
@@ -20,44 +20,56 @@ type FrameMessage = {
 type FinishMessage = { type: "finish" };
 type WorkerMessage = StartMessage | FrameMessage | FinishMessage;
 
-let encoder: ReturnType<typeof GIFEncoder> | null = null;
 let width = 0;
 let height = 0;
 let repeat = 0;
-let colors = 256;
+let quality = 100;
+let frames: Uint8Array[] = [];
+let frameDurations: number[] = [];
 
-self.onmessage = (event: MessageEvent<WorkerMessage>) => {
+self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const message = event.data;
 
   try {
     if (message.type === "start") {
-      encoder = GIFEncoder();
       width = message.width;
       height = message.height;
       repeat = message.repeat;
-      colors = message.colors;
+      quality = message.quality;
+      frames = [];
+      frameDurations = [];
       self.postMessage({ type: "ready" });
       return;
     }
 
     if (message.type === "frame") {
-      if (!encoder) throw new Error("The encoder was not initialized.");
-      const rgba = new Uint8ClampedArray(message.rgba);
-      const palette = quantize(rgba, colors, { format: "rgb565" });
-      const indexed = applyPalette(rgba, palette, "rgb565");
-      encoder.writeFrame(indexed, width, height, {
-        palette,
-        delay: message.delay,
-        repeat,
-      });
+      frames.push(new Uint8Array(message.rgba));
+      frameDurations.push(message.delay);
       self.postMessage({ type: "frame-done", index: message.index });
       return;
     }
 
-    if (!encoder) throw new Error("The encoder was not initialized.");
-    encoder.finish();
-    const bytes = encoder.bytes();
-    encoder = null;
+    if (!frames.length) throw new Error("Add at least one frame before exporting.");
+
+    // The WASM wrapper requires an animation. Duplicating a lone frame keeps
+    // single-image exports visually static while still using Gifski.
+    if (frames.length === 1) {
+      const duration = Math.max(20, frameDurations[0]);
+      frames.push(frames[0]);
+      frameDurations = [Math.max(20, Math.round(duration / 2)), Math.max(20, Math.round(duration / 2))];
+    }
+
+    self.postMessage({ type: "encoding" });
+    const bytes = await gifskiEncode({
+      frames,
+      width,
+      height,
+      frameDurations,
+      quality,
+      repeat,
+    });
+    frames = [];
+    frameDurations = [];
     self.postMessage({ type: "complete", buffer: bytes.buffer }, [bytes.buffer]);
   } catch (error) {
     self.postMessage({

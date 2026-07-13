@@ -15,6 +15,11 @@ npm run dev
 - Preview, reorder, remove, and retime frames.
 - Set frame timing, looping, output dimensions, quality, and image fit.
 - Export above 800px with no artificial resolution cap.
-- Perform all image processing in the browser using a dedicated worker.
+- Detect the first imported frame's dimensions and apply them to the canvas automatically.
+- Encode with Gifski WebAssembly inside a dedicated browser worker.
+
+## Gifski
+
+Web exports use `gifski-wasm`, a WebAssembly wrapper around Gifski. It is distributed under AGPL-3.0-or-later; its license is included with the installed package.
 
 The previous native macOS source is still present for reference while the web migration settles, but the primary product and development workflow are now web-based.
