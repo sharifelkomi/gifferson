@@ -1,40 +1,25 @@
 # Gifferson
 
-A native macOS GIF builder modeled after Figma's GIF maker, without the 800px export-size cap.
+A private, browser-based GIF maker. Images are decoded and encoded locally in the tab: there are no accounts, uploads, project history, or server-side files.
 
-## Run
-
-```sh
-swift run Gifferson
-```
-
-## Build A Mac App
+## Run locally
 
 ```sh
-./scripts/build_app.sh
-open "Build/Gifferson.app"
+npm install
+npm run dev
 ```
 
 ## Features
 
-- Drag images into the timeline or use **Add Frames**.
-- Preview frames with play, previous, and next controls.
-- Set default frame duration, per-frame duration, loop mode, output width and height.
-- Start from a 1920x1080 export size by default.
-- Lock output aspect ratio while changing width or height.
-- Choose fit behavior: fill, fit, or stretch.
-- Choose encoder: fast Apple GIF export or high-quality Gifski export.
-- Choose GIF quality: best, balanced, or compact.
-- Export GIFs above 800px; output size is limited by available memory, not by an artificial 800px cap.
+- Drag in PNG, JPEG, WebP, BMP, or animated GIF files.
+- Preview, reorder, remove, and retime frames.
+- Set frame timing, looping, output dimensions, quality, and image fit.
+- Export above 800px with no artificial resolution cap.
+- Detect the first imported frame's dimensions and apply them to the canvas automatically.
+- Encode with Gifski WebAssembly inside a dedicated browser worker.
 
-## Gifski Encoder
+## Gifski
 
-The Gifski encoder path uses the `gifski` command-line tool when it is available on the Mac. Install it with:
+Web exports use the multithreaded `gifski-wasm` build, a WebAssembly wrapper around Gifski. It is distributed under AGPL-3.0-or-later; its license is included with the installed package. Cross-origin isolation headers enable the threaded encoder so high-resolution exports keep Gifski's cross-frame palettes and temporal dithering without reducing their dimensions.
 
-```sh
-brew install gifski
-```
-
-Release builds made by `scripts/build_app.sh` bundle a pinned universal macOS `gifski` binary inside the app at `Contents/Resources/bin/gifski`. During development, the app also checks common Homebrew/MacPorts paths and `PATH`. You can set `GIFSKI_PATH` to the full executable path to override this.
-
-`gifski` is distributed under AGPL-3.0-or-later unless you obtain a separate license from its author. The bundled license is copied into `Contents/Resources/licenses/gifski/`.
+The previous native macOS source is still present for reference while the web migration settles, but the primary product and development workflow are now web-based.
