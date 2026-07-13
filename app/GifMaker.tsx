@@ -1,10 +1,8 @@
 "use client";
 
 import {
-  Check,
   Clock3,
   Download,
-  GripVertical,
   ImagePlus,
   Layers3,
   Lock,
@@ -15,7 +13,6 @@ import {
   ShieldCheck,
   SkipBack,
   SkipForward,
-  Sparkles,
   Trash2,
   Unlock,
   Upload,
@@ -40,11 +37,6 @@ import {
 } from "./gif-utils";
 
 const ACCEPTED_FILES = "image/png,image/jpeg,image/webp,image/gif,image/bmp";
-
-function secondsLabel(value: number) {
-  if (value < 1) return `${Math.round(value * 1000)}ms`;
-  return `${value.toFixed(value % 1 === 0 ? 0 : 1)}s`;
-}
 
 function durationLabel(seconds: number) {
   if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
@@ -76,35 +68,6 @@ function IconButton({
     >
       {children}
     </button>
-  );
-}
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
-  label: string;
-}) {
-  return (
-    <div className="segmented" role="group" aria-label={label}>
-      {options.map((option) => (
-        <button
-          type="button"
-          key={option.value}
-          className={value === option.value ? "is-active" : ""}
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-        >
-          {value === option.value && <Check size={13} strokeWidth={3} />}
-          {option.label}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -305,20 +268,19 @@ export default function GifMaker() {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Gifferson home">
-          <span className="brand-mark"><Sparkles size={18} /></span>
+          <span className="brand-mark">G</span>
           <span>Gifferson</span>
-          <span className="beta">WEB</span>
         </a>
 
         <div className="stats" aria-label="Animation summary">
-          <span><Layers3 size={15} /> {frames.length} {frames.length === 1 ? "frame" : "frames"}</span>
-          <span><Ratio size={15} /> {width}×{height}</span>
-          <span><Clock3 size={15} /> {durationLabel(totalDuration)}</span>
+          <span><Layers3 size={13} /> {frames.length} {frames.length === 1 ? "frame" : "frames"}</span>
+          <span><Ratio size={13} /> {width}×{height}</span>
+          <span><Clock3 size={13} /> {durationLabel(totalDuration)}</span>
         </div>
 
         <div className="top-actions">
           <button className="button button--ghost" type="button" onClick={() => inputRef.current?.click()}>
-            <Plus size={17} /> Add frames
+            <Plus size={14} /> Add
           </button>
           <button
             className="button button--primary"
@@ -326,8 +288,8 @@ export default function GifMaker() {
             disabled={!frames.length || isExporting}
             onClick={handleExport}
           >
-            {isExporting ? <span className="spinner" /> : <Download size={17} />}
-            {isExporting ? `Encoding ${Math.round(progress * 100)}%` : "Export GIF"}
+            {isExporting ? <span className="spinner" /> : <Download size={14} />}
+            {isExporting ? `${Math.round(progress * 100)}%` : "Export"}
           </button>
         </div>
       </header>
@@ -341,255 +303,164 @@ export default function GifMaker() {
         }}
         onDrop={onDrop}
       >
-        <div className="preview-column">
-          <div className="preview-stage">
-            <div className="ambient ambient--one" />
-            <div className="ambient ambient--two" />
-
-            {selectedFrame ? (
-              <div
-                className="preview-canvas"
-                style={{ aspectRatio: `${width} / ${height}` }}
-              >
-                {/* User-selected blob URL; it never leaves this browser tab. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={selectedFrame.url}
-                  alt={`Preview of ${selectedFrame.name}`}
-                  style={{ objectFit: fit === "stretch" ? "fill" : fit === "fill" ? "cover" : "contain" }}
-                />
-              </div>
-            ) : (
-              <button className="empty-state" type="button" onClick={() => inputRef.current?.click()}>
-                <span className="empty-icon"><ImagePlus size={30} /></span>
-                <strong>{isImporting ? "Preparing your frames…" : "Drop images to begin"}</strong>
-                <span>PNG, JPG, WebP, BMP, or animated GIF</span>
-                <span className="browse-pill"><Upload size={15} /> Choose images</span>
-              </button>
-            )}
-
-            {isDraggingOver && (
-              <div className="drop-overlay">
-                <span><ImagePlus size={28} /></span>
-                <strong>Drop to add frames</strong>
-              </div>
-            )}
-
-            <div className="playback">
-              <IconButton label="Previous frame" disabled={!frames.length} onClick={selectPrevious}>
-                <SkipBack size={17} fill="currentColor" />
-              </IconButton>
-              <IconButton
-                label={isPlaying ? "Pause preview" : "Play preview"}
-                disabled={!frames.length}
-                primary
-                onClick={() => setIsPlaying((current) => !current)}
-              >
-                {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
-              </IconButton>
-              <IconButton label="Next frame" disabled={!frames.length} onClick={selectNext}>
-                <SkipForward size={17} fill="currentColor" />
-              </IconButton>
-              <span className="playback-count">
-                {selectedIndex >= 0 ? selectedIndex + 1 : 0}<i>/</i>{frames.length}
-              </span>
+        <div className="preview-stage">
+          {selectedFrame ? (
+            <div
+              className="preview-canvas"
+              style={{
+                aspectRatio: `${width} / ${height}`,
+                width: `min(90%, calc((100dvh - 340px) * ${width / Math.max(1, height)}))`,
+              }}
+            >
+              {/* User-selected blob URL; it never leaves this browser tab. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selectedFrame.url}
+                alt={`Preview of ${selectedFrame.name}`}
+                style={{ objectFit: fit === "stretch" ? "fill" : fit === "fill" ? "cover" : "contain" }}
+              />
             </div>
-          </div>
-
-          <div className="timeline-panel">
-            <div className="timeline-heading">
-              <div>
-                <span className="eyebrow">TIMELINE</span>
-                <span className="timeline-hint">Drag frames to reorder</span>
-              </div>
-              {frames.length > 0 && (
-                <button className="text-button text-button--danger" type="button" onClick={clearAll}>
-                  <Trash2 size={14} /> Clear all
-                </button>
-              )}
-            </div>
-
-            <div className="timeline" aria-label="GIF frame timeline">
-              {frames.map((frame, index) => (
-                <article
-                  key={frame.id}
-                  className={`frame-card${frame.id === selectedFrame?.id ? " is-selected" : ""}${draggingId === frame.id ? " is-dragging" : ""}`}
-                  draggable
-                  onDragStart={() => setDraggingId(frame.id)}
-                  onDragEnd={() => setDraggingId(null)}
-                  onDragOver={(event) => { event.preventDefault(); reorder(frame.id); }}
-                  onClick={() => setSelectedId(frame.id)}
-                  aria-label={`Frame ${index + 1}: ${frame.name}`}
-                >
-                  <div className="frame-image">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={frame.url} alt="" />
-                    <span className="frame-number">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="drag-handle"><GripVertical size={15} /></span>
-                    <button
-                      type="button"
-                      className="frame-delete"
-                      aria-label={`Delete frame ${index + 1}`}
-                      onClick={(event) => { event.stopPropagation(); removeFrame(frame.id); }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <label className="duration-control" onClick={(event) => event.stopPropagation()}>
-                    <Clock3 size={13} />
-                    <input
-                      aria-label={`Frame ${index + 1} duration in seconds`}
-                      type="number"
-                      min="0.02"
-                      max="60"
-                      step="0.01"
-                      value={Number(frame.duration.toFixed(2))}
-                      onChange={(event) => updateDuration(frame.id, Number(event.target.value))}
-                    />
-                    <span>s</span>
-                  </label>
-                </article>
-              ))}
-
-              <button className="add-card" type="button" onClick={() => inputRef.current?.click()}>
-                <Plus size={22} />
-                <span>Add</span>
+          ) : (
+            <div className="empty-state">
+              <ImagePlus size={34} />
+              <strong>{isImporting ? "Preparing your frames…" : "Drop images here"}</strong>
+              <button type="button" onClick={() => inputRef.current?.click()}>
+                <Upload size={14} /> Add Frames
               </button>
             </div>
+          )}
+
+          {isDraggingOver && (
+            <div className="drop-overlay">
+              <ImagePlus size={30} />
+              <strong>Drop to add frames</strong>
+            </div>
+          )}
+
+          <div className="playback">
+            <IconButton label="Previous frame" disabled={!frames.length} onClick={selectPrevious}>
+              <SkipBack size={15} fill="currentColor" />
+            </IconButton>
+            <IconButton
+              label={isPlaying ? "Pause preview" : "Play preview"}
+              disabled={!frames.length}
+              primary
+              onClick={() => setIsPlaying((current) => !current)}
+            >
+              {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+            </IconButton>
+            <IconButton label="Next frame" disabled={!frames.length} onClick={selectNext}>
+              <SkipForward size={15} fill="currentColor" />
+            </IconButton>
+            <span className="playback-count">
+              {selectedIndex >= 0 ? selectedIndex + 1 : 0} / {frames.length}
+            </span>
           </div>
         </div>
 
-        <aside className="settings-panel">
-          <div className="settings-title">
-            <div>
-              <span className="eyebrow">EXPORT SETTINGS</span>
-              <h1>Make it yours.</h1>
-            </div>
-            <span className="local-badge"><ShieldCheck size={14} /> Local only</span>
-          </div>
-
-          <div className="setting-group">
-            <div className="setting-label">
-              <label htmlFor="frame-time">Frame time</label>
-              <span>Applied to every frame</span>
-            </div>
-            <div className="number-field number-field--unit">
-              <input
-                id="frame-time"
-                type="number"
-                min="0.02"
-                max="60"
-                step="0.05"
-                value={defaultDuration}
-                onChange={(event) => applyDefaultDuration(Number(event.target.value))}
-              />
-              <span>sec</span>
-            </div>
-            <div className="preset-row">
-              {[0.1, 0.2, 0.5, 1].map((duration) => (
+        <div className="timeline-panel">
+          <div className={`timeline${frames.length ? "" : " is-empty"}`} aria-label="GIF frame timeline">
+            {frames.map((frame, index) => (
+              <article
+                key={frame.id}
+                className={`frame-card${frame.id === selectedFrame?.id ? " is-selected" : ""}${draggingId === frame.id ? " is-dragging" : ""}`}
+                style={{ flexBasis: Math.max(70, Math.round(112 * frame.width / Math.max(1, frame.height))) }}
+                draggable
+                onDragStart={() => setDraggingId(frame.id)}
+                onDragEnd={() => setDraggingId(null)}
+                onDragOver={(event) => { event.preventDefault(); reorder(frame.id); }}
+                onClick={() => setSelectedId(frame.id)}
+                aria-label={`Frame ${index + 1}: ${frame.name}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={frame.url} alt="" />
+                <label className="duration-control" onClick={(event) => event.stopPropagation()}>
+                  <input
+                    aria-label={`Frame ${index + 1} duration in seconds`}
+                    type="number"
+                    min="0.02"
+                    max="60"
+                    step="0.01"
+                    value={Number(frame.duration.toFixed(2))}
+                    onChange={(event) => updateDuration(frame.id, Number(event.target.value))}
+                  />
+                  <span>s</span>
+                </label>
                 <button
                   type="button"
-                  key={duration}
-                  className={defaultDuration === duration ? "is-active" : ""}
-                  onClick={() => applyDefaultDuration(duration)}
+                  className="frame-delete"
+                  aria-label={`Delete frame ${index + 1}`}
+                  onClick={(event) => { event.stopPropagation(); removeFrame(frame.id); }}
                 >
-                  {secondsLabel(duration)}
+                  <Trash2 size={13} fill="currentColor" />
                 </button>
-              ))}
-            </div>
-          </div>
+              </article>
+            ))}
 
-          <div className="setting-group">
-            <div className="setting-label">
-              <span>Canvas size</span>
-              <span>No artificial 800px cap</span>
-            </div>
-            <div className="dimension-row">
-              <label className="number-field">
-                <span>W</span>
-                <input type="number" min="1" max="8192" value={width} onChange={(event) => updateWidth(Number(event.target.value))} />
-              </label>
-              <button className={`lock-button${locked ? " is-active" : ""}`} type="button" onClick={toggleLock} aria-label={locked ? "Unlock aspect ratio" : "Lock aspect ratio"}>
-                {locked ? <Lock size={15} /> : <Unlock size={15} />}
+            <button className={`add-card${frames.length ? "" : " add-card--empty"}`} type="button" onClick={() => inputRef.current?.click()}>
+              <Plus size={frames.length ? 21 : 16} />
+              <span>{frames.length ? "" : "Add frames"}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-strip">
+          <label className="compact-control">
+            <span>Duration</span>
+            <select value={defaultDuration} onChange={(event) => applyDefaultDuration(Number(event.target.value))}>
+              {[0.1, 0.2, 0.3, 0.5, 1, 2, 5].map((duration) => (
+                <option key={duration} value={duration}>{duration >= 1 ? `${duration}s` : `${duration.toFixed(1)}s`}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="compact-control">
+            <span>Loop</span>
+            <select value={loop} onChange={(event) => setLoop(event.target.value as LoopMode)}>
+              <option value="forever">Infinite</option>
+              <option value="once">Once</option>
+              <option value="three">3x</option>
+            </select>
+          </label>
+
+          <div className="compact-control size-control">
+            <span>Size</span>
+            <div>
+              <input aria-label="Output width" type="number" min="1" max="8192" value={width} onChange={(event) => updateWidth(Number(event.target.value))} />
+              <i>×</i>
+              <input aria-label="Output height" type="number" min="1" max="8192" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
+              <button type="button" onClick={toggleLock} aria-label={locked ? "Unlock aspect ratio" : "Lock aspect ratio"}>
+                {locked ? <Lock size={11} fill="currentColor" /> : <Unlock size={11} />}
               </button>
-              <label className="number-field">
-                <span>H</span>
-                <input type="number" min="1" max="8192" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
-              </label>
-            </div>
-            <div className="preset-row preset-row--sizes">
-              {[
-                [640, 360],
-                [1280, 720],
-                [1920, 1080],
-              ].map(([presetWidth, presetHeight]) => (
-                <button
-                  type="button"
-                  key={presetWidth}
-                  className={width === presetWidth && height === presetHeight ? "is-active" : ""}
-                  onClick={() => { setWidth(presetWidth); setHeight(presetHeight); setLockedRatio(presetWidth / presetHeight); }}
-                >
-                  {presetWidth === 1920 ? "1080p" : presetWidth === 1280 ? "720p" : "360p"}
-                </button>
-              ))}
             </div>
           </div>
 
-          <div className="setting-group">
-            <div className="setting-label"><span>Image fit</span></div>
-            <Segmented
-              value={fit}
-              onChange={setFit}
-              label="Image fit"
-              options={[
-                { value: "fill", label: "Fill" },
-                { value: "fit", label: "Fit" },
-                { value: "stretch", label: "Stretch" },
-              ]}
-            />
-          </div>
+          <label className="compact-control">
+            <span>Fit</span>
+            <select value={fit} onChange={(event) => setFit(event.target.value as FitMode)}>
+              <option value="fill">Fill</option>
+              <option value="fit">Fit</option>
+              <option value="stretch">Stretch</option>
+            </select>
+          </label>
 
-          <div className="setting-group setting-grid">
-            <label>
-              <span>Loop</span>
-              <select value={loop} onChange={(event) => setLoop(event.target.value as LoopMode)}>
-                <option value="forever">Forever</option>
-                <option value="once">Play once</option>
-                <option value="three">3 times</option>
-              </select>
-            </label>
-            <label>
-              <span>Quality</span>
-              <select value={quality} onChange={(event) => setQuality(event.target.value as QualityMode)}>
-                <option value="best">Best</option>
-                <option value="balanced">Balanced</option>
-                <option value="compact">Compact</option>
-              </select>
-            </label>
-          </div>
+          <label className="compact-control">
+            <span>Quality</span>
+            <select value={quality} onChange={(event) => setQuality(event.target.value as QualityMode)}>
+              <option value="best">Best</option>
+              <option value="balanced">Balanced</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
 
-          <div className="privacy-note">
-            <ShieldCheck size={18} />
-            <div>
-              <strong>Your images stay on this device.</strong>
-              <span>No upload, account, history, or saved project. Closing this tab clears the session.</span>
-            </div>
-          </div>
-
-          <button
-            className="export-button"
-            type="button"
-            disabled={!frames.length || isExporting}
-            onClick={handleExport}
-          >
-            <span>
-              {isExporting ? <span className="spinner" /> : <Download size={19} />}
-              {isExporting ? "Encoding your GIF" : "Export GIF"}
-            </span>
-            <small>{isExporting ? `${Math.round(progress * 100)}% complete` : `${width}×${height} · ${frames.length} frames`}</small>
-            {isExporting && <i style={{ width: `${progress * 100}%` }} />}
-          </button>
-        </aside>
+          <div className="settings-spacer" />
+          <span className="privacy-compact"><ShieldCheck size={13} /> Local only</span>
+          {frames.length > 0 && (
+            <button className="clear-button" type="button" onClick={clearAll} title="Clear all frames">
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
       </section>
 
       <input ref={inputRef} className="file-input" type="file" accept={ACCEPTED_FILES} multiple onChange={onFileChange} />
