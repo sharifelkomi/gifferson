@@ -2,3 +2,14 @@
 .build/
 Build/
 .swiftpm/
+
+# Web app
+node_modules/
+.next/
+.vinext/
+dist/
+.wrangler/
+next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*
+.env*
