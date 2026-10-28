@@ -456,7 +456,7 @@ export default function GifMaker() {
 
         <div className="top-actions">
           <button
-            className="theme-toggle"
+            className="theme-toggle theme-toggle--raised"
             type="button"
             aria-label="Toggle color theme"
             title="Toggle color theme"
@@ -475,14 +475,15 @@ export default function GifMaker() {
             <Plus size={15} aria-hidden="true" />
           </button>
           <button
-            className="theme-toggle delete-toggle"
+            className="button button--secondary button--danger"
             type="button"
             aria-label="Clear all frames"
             title="Clear all frames"
             disabled={!frames.length}
             onClick={clearAll}
           >
-            <Trash2 size={15} aria-hidden="true" />
+            <Trash2 size={14} aria-hidden="true" />
+            Clear all
           </button>
           <button
             className="button button--primary"

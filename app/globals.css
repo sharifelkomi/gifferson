@@ -19,6 +19,8 @@
   /* The encoder fills transparency with white, so the preview shows white in both themes. */
   --preview-canvas: #ffffff;
   --preview-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  --shadow-raised: 0 1px 2px rgba(18, 18, 18, 0.06), 0 2px 8px rgba(18, 18, 18, 0.05);
+  --shadow-raised-hover: 0 1px 2px rgba(18, 18, 18, 0.08), 0 4px 12px rgba(18, 18, 18, 0.08);
   --chip: rgba(18, 18, 18, 0.72);
   --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --gutter: 32px;
@@ -56,6 +58,8 @@
   --overlay: rgba(22, 21, 20, 0.94);
   --shadow-float: 0 0 24px rgba(0, 0, 0, 0.4);
   --preview-shadow: none;
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-raised-hover: 0 1px 2px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
   --ring-color: #d9d5cf;
   --focus-color: var(--ink);
@@ -197,7 +201,7 @@ a:focus-visible {
   font-weight: 600;
   height: 38px;
   justify-content: center;
-  transition: background 180ms ease, color 180ms ease, transform 120ms var(--ease);
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 120ms var(--ease);
 }
 
 .button:active:not(:disabled),
@@ -245,8 +249,21 @@ a:focus-visible {
   color: var(--disabled);
 }
 
+.theme-toggle--raised,
+.button--secondary {
+  background: var(--raised);
+  box-shadow: var(--shadow-raised);
+  color: var(--heading);
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .delete-toggle:hover:not(:disabled) {
+  .theme-toggle--raised:hover:not(:disabled),
+  .button--secondary:hover:not(:disabled) {
+    background: var(--raised);
+    box-shadow: var(--shadow-raised-hover);
+  }
+
+  .button--danger:hover:not(:disabled) {
     color: var(--danger);
   }
 }
@@ -265,6 +282,7 @@ a:focus-visible {
 
 .button:disabled {
   background: var(--sand);
+  box-shadow: none;
   color: var(--disabled);
 }
 
@@ -1138,7 +1156,8 @@ a:focus-visible {
     padding-right: 12px;
   }
 
-  .button--primary {
+  .button--primary,
+  .button--secondary {
     font-size: 0;
     gap: 0;
     min-width: 38px;

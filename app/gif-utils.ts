@@ -208,7 +208,9 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
     type: "module",
   });
   const repeat = loop === "forever" ? 0 : loop === "once" ? -1 : 3;
-  const gifskiQuality = quality === "best" ? 100 : quality === "balanced" ? 85 : 65;
+  // Gifski's quality scale is nearly flat above ~80 (85 is only ~2% smaller
+  // than 100), so the lighter presets sit lower to make a real difference.
+  const gifskiQuality = quality === "best" ? 100 : quality === "balanced" ? 60 : 40;
 
   return new Promise<Blob>((resolve, reject) => {
     let nextFrame = 0;
