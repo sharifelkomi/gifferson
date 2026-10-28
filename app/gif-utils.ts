@@ -261,7 +261,9 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
   const worker = new Worker(new URL("./gif-worker.ts", import.meta.url), {
     type: "module",
   });
-  const repeat = loop === "forever" ? 0 : loop === "once" ? -1 : 3;
+  // gifski-wasm: -1 writes a loop count of 0 (repeat forever), 0 writes no
+  // loop extension (play once), and n > 0 writes n repeats.
+  const repeat = loop === "forever" ? -1 : loop === "once" ? 0 : 3;
   // Gifski's quality scale is nearly flat above ~80 (85 is only ~2% smaller
   // than 100), so the lighter presets sit lower to make a real difference.
   const gifskiQuality = quality === "best" ? 100 : quality === "balanced" ? 60 : 40;
