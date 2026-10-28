@@ -2,8 +2,13 @@ import vinext from "vinext";
 import { defineConfig } from "vite";
 
 const localBindingConfig = {
+  name: "gifferson",
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  routes: [
+    { pattern: "gifferson.com", custom_domain: true },
+    { pattern: "www.gifferson.com", custom_domain: true },
+  ],
 };
 
 export default defineConfig(async () => {

@@ -12,7 +12,6 @@
   --body: #474645;
   --muted: #6b6a69;
   --disabled: #b5b2ad;
-  --link: #d03300;
   --danger: #ff2b3a;
   --overlay: rgba(251, 250, 249, 0.94);
   --shadow-float: 0 0 24px rgba(0, 0, 0, 0.15);
@@ -53,7 +52,6 @@
   --body: #cdc9c3;
   --muted: #8f8b85;
   --disabled: #5c5955;
-  --link: #ff6a33;
   --danger: #ff5c66;
   --overlay: rgba(22, 21, 20, 0.94);
   --shadow-float: 0 0 24px rgba(0, 0, 0, 0.4);
@@ -1290,14 +1288,16 @@ a:focus-visible {
 }
 
 .credits a {
-  color: var(--link);
+  color: inherit;
   text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
   text-underline-offset: 2px;
-  transition: opacity 160ms ease;
+  transition: color 160ms ease, text-decoration-color 160ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .credits a:hover {
-    opacity: 0.8;
+    color: var(--body);
+    text-decoration-color: currentColor;
   }
 }
