@@ -1,40 +1,64 @@
 :root {
-  --bg: #ffffff;
-  --surface: #f2f2f0;
-  --surface-strong: #e8e8e5;
-  --text: #111111;
-  --muted: #6f6f6b;
-  --disabled: #a1a19c;
-  --rule: rgba(17, 17, 17, 0.14);
-  --rule-strong: rgba(17, 17, 17, 0.28);
-  --accent: #dbff00;
-  --danger: #b52a2a;
-  --overlay: rgba(255, 255, 255, 0.94);
-  --shadow: 0 12px 36px rgba(17, 17, 17, 0.12);
+  --canvas: #fbfaf9;
+  --stone: #f2f0ed;
+  --sand: #f6f4ef;
+  --raised: #ffffff;
+  --hairline: #ebe8e4;
+  --hairline-strong: #d9d5cf;
+  --ink: #121212;
+  --ink-hover: #343433;
+  --on-ink: #fbfaf9;
+  --heading: #343433;
+  --body: #474645;
+  --muted: #7e7e7d;
+  --disabled: #b5b2ad;
+  --link: #ff3e00;
+  --danger: #ff2b3a;
+  --overlay: rgba(251, 250, 249, 0.94);
+  --shadow-float: 0 0 24px rgba(0, 0, 0, 0.15);
+  /* The encoder fills transparency with white, so the preview shows white in both themes. */
   --preview-canvas: #ffffff;
-  --preview-shadow: 0 5px 20px rgba(17, 17, 17, 0.08);
-  --font-sans: Inter, Arial, Helvetica, sans-serif;
-  --font-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-  --gutter: 36px;
+  --preview-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  --chip: rgba(18, 18, 18, 0.72);
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --gutter: 32px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --radius-panel: 16px;
+  --radius-card: 10px;
+  --radius-badge: 6px;
+  --ring-gap: 2px;
+  --ring-width: 2px;
+  /* Room the timeline leaves for the ring: gap + width + 1px for anti-aliasing. */
+  --ring-reach: 5px;
+  --ring-color: #343433;
+  --focus-color: var(--ink);
+  --z-overlay: 10;
+  --z-toast: 50;
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #111111;
-  --surface: #1a1a19;
-  --surface-strong: #252524;
-  --text: #f3f3f0;
-  --muted: #a0a09a;
-  --disabled: #62625e;
-  --rule: rgba(255, 255, 255, 0.14);
-  --rule-strong: rgba(255, 255, 255, 0.28);
-  --danger: #ff7770;
-  --overlay: rgba(17, 17, 17, 0.94);
-  --shadow: 0 12px 36px rgba(0, 0, 0, 0.32);
-  --preview-canvas: #000000;
+  --canvas: #161514;
+  --stone: #1f1e1c;
+  --sand: #242321;
+  --raised: #1d1c1a;
+  --hairline: rgba(255, 248, 236, 0.08);
+  --hairline-strong: rgba(255, 248, 236, 0.18);
+  --ink: #f3f1ed;
+  --ink-hover: #d9d5cf;
+  --on-ink: #121212;
+  --heading: #ece9e4;
+  --body: #cdc9c3;
+  --muted: #8f8b85;
+  --disabled: #5c5955;
+  --link: #ff6a33;
+  --danger: #ff5c66;
+  --overlay: rgba(22, 21, 20, 0.94);
+  --shadow-float: 0 0 24px rgba(0, 0, 0, 0.4);
   --preview-shadow: none;
   color-scheme: dark;
+  --ring-color: #d9d5cf;
+  --focus-color: var(--ink);
 }
 
 * {
@@ -42,15 +66,24 @@
 }
 
 html {
-  background: var(--bg);
+  background: var(--canvas);
   min-width: 320px;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Frames live only in memory, so pull-to-refresh would wipe the work. */
+html,
+body {
+  overscroll-behavior: none;
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--canvas);
+  color: var(--body);
   font-family: var(--font-sans);
   font-size: 14px;
+  letter-spacing: -0.01em;
   margin: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
@@ -62,11 +95,28 @@ input,
 select {
   color: inherit;
   font: inherit;
+  letter-spacing: inherit;
 }
 
 button,
 select {
   cursor: pointer;
+}
+
+button,
+a,
+input,
+select,
+label {
+  touch-action: manipulation;
+}
+
+button,
+.frame-card,
+.add-card {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button:disabled {
@@ -77,21 +127,22 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
 
 .app-shell {
-  background: var(--bg);
+  background: var(--canvas);
   height: 100dvh;
   min-height: 620px;
   overflow: hidden;
 }
 
+/* Top bar */
+
 .topbar {
   align-items: center;
-  background: var(--bg);
-  border-bottom: 1px solid var(--rule);
+  background: var(--canvas);
   display: flex;
   gap: 32px;
   height: 70px;
@@ -100,10 +151,10 @@ a:focus-visible {
 
 .brand {
   align-items: baseline;
-  color: var(--text);
+  color: var(--ink);
   display: inline-flex;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   gap: 11px;
   letter-spacing: -0.02em;
   text-decoration: none;
@@ -114,7 +165,7 @@ a:focus-visible {
   align-items: center;
   color: var(--muted);
   display: flex;
-  font-size: 12px;
+  font-size: 13px;
   gap: 0;
   white-space: nowrap;
 }
@@ -139,24 +190,35 @@ a:focus-visible {
 .button,
 .theme-toggle {
   align-items: center;
-  border-radius: 0;
+  border: 0;
+  border-radius: 9999px;
   display: inline-flex;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   height: 38px;
   justify-content: center;
-  transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+  transition: background 180ms ease, color 180ms ease, transform 120ms var(--ease);
+}
+
+.button:active:not(:disabled),
+.theme-toggle:active:not(:disabled),
+.icon-button:active:not(:disabled),
+.add-card:active,
+.size-control button:active,
+.frame-delete:active,
+.toast button:active {
+  transform: scale(0.96);
 }
 
 .button {
-  border: 1px solid var(--rule-strong);
+  font-variant-numeric: tabular-nums;
   gap: 7px;
-  padding: 0 15px;
+  padding: 0 16px 0 14px;
 }
 
 .theme-toggle {
   background: transparent;
-  border: 1px solid var(--rule);
+  color: var(--heading);
   padding: 0;
   width: 38px;
 }
@@ -173,59 +235,69 @@ a:focus-visible {
   display: block;
 }
 
-.theme-toggle:hover {
-  background: var(--surface);
-  border-color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .theme-toggle:hover:not(:disabled) {
+    background: var(--sand);
+  }
 }
 
-.delete-toggle:hover {
-  border-color: var(--danger);
-  color: var(--danger);
+.theme-toggle:disabled {
+  color: var(--disabled);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .delete-toggle:hover:not(:disabled) {
+    color: var(--danger);
+  }
 }
 
 .button--primary {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
+  background: var(--ink);
+  color: var(--on-ink);
   min-width: 104px;
 }
 
-.button--primary:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #111111;
+@media (hover: hover) and (pointer: fine) {
+  .button--primary:hover:not(:disabled) {
+    background: var(--ink-hover);
+  }
 }
 
 .button:disabled {
-  background: var(--surface);
-  border-color: var(--rule);
+  background: var(--sand);
   color: var(--disabled);
 }
+
+/* Workspace */
 
 .workspace {
   display: grid;
   grid-template-rows: minmax(0, 1fr) 142px auto;
-  height: calc(100dvh - 70px);
+  height: calc(max(100dvh, 620px) - 70px);
   min-width: 0;
   min-height: 0;
   position: relative;
 }
 
+/* Padding keeps the canvas off the panel edge; the ResizeObserver measures the content box. */
 .preview-stage {
   align-items: center;
-  background: var(--bg);
+  background: var(--stone);
+  border-radius: var(--radius-panel);
   display: flex;
   justify-content: center;
   margin: 20px var(--gutter) 0;
   min-height: 0;
   overflow: hidden;
-  padding: 0;
+  isolation: isolate;
+  padding: 24px;
   position: relative;
 }
 
 .preview-canvas {
   background: var(--preview-canvas);
   border: 0;
+  border-radius: 0;
   box-shadow: var(--preview-shadow);
   flex: 0 0 auto;
   max-height: 100%;
@@ -245,126 +317,187 @@ a:focus-visible {
 .empty-state {
   align-items: center;
   background: transparent;
-  border: 1px dashed var(--rule-strong);
-  color: var(--disabled);
+  border: 0;
+  border-radius: var(--radius-panel);
+  color: var(--muted);
   display: flex;
-  font-size: 12px;
+  flex-direction: column;
+  font-size: 13px;
   font-weight: 400;
-  height: 100%;
+  gap: 6px;
+  inset: 0;
   justify-content: center;
-  max-width: none;
   padding: 18px;
-  transition: border-color 180ms ease, color 180ms ease;
-  width: 100%;
+  position: absolute;
+  text-align: center;
 }
 
-.empty-state:hover {
-  border-color: var(--muted);
+/* The stage clips overflow, so pull the ring inside. */
+.empty-state:focus-visible {
+  outline-offset: -4px;
+}
+
+.empty-state strong {
+  color: var(--heading);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.empty-state > span:not(.empty-state__cta) {
   color: var(--muted);
+  font-size: 13px;
+}
+
+.empty-state__cta {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 9999px;
+  color: var(--on-ink);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  height: 38px;
+  margin-top: 14px;
+  padding: 0 18px;
+  transition: background 180ms ease, transform 120ms var(--ease);
+}
+
+.empty-state:active .empty-state__cta {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .empty-state:hover .empty-state__cta {
+    background: var(--ink-hover);
+  }
 }
 
 .drop-overlay {
   align-items: center;
   background: var(--overlay);
-  border: 2px solid var(--accent);
+  border-radius: var(--radius-panel);
+  box-shadow: inset 0 0 0 2px var(--ink);
   display: flex;
   flex-direction: column;
   gap: 14px;
-  inset: 14px;
+  inset: 0;
   justify-content: center;
+  pointer-events: none;
   position: absolute;
-  z-index: 10;
+  z-index: var(--z-overlay);
 }
 
 .drop-overlay svg {
-  color: var(--text);
+  color: var(--heading);
 }
 
 .drop-overlay strong {
-  font-size: 18px;
+  color: var(--heading);
+  font-size: 19px;
   font-weight: 500;
 }
 
+/* Playback */
+
 .playback {
   align-items: center;
-  background: var(--bg);
-  border: 1px solid var(--rule);
+  align-self: flex-start;
+  background: var(--raised);
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--hairline);
   display: flex;
   gap: 2px;
-  height: 32px;
-  justify-self: start;
-  padding: 0;
+  height: 36px;
+  padding: 3px;
 }
 
 .icon-button {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 0;
-  color: var(--text);
+  border-radius: 9999px;
+  color: var(--heading);
   display: flex;
   height: 30px;
   justify-content: center;
   padding: 0;
-  transition: background 160ms ease, color 160ms ease;
+  position: relative;
+  transition: background 160ms ease, color 160ms ease, transform 120ms var(--ease);
   width: 30px;
 }
 
-.icon-button:hover:not(:disabled) {
-  background: var(--surface);
+.icon-button::before {
+  content: "";
+  inset: -5px 0;
+  position: absolute;
+}
+
+.play-icon {
+  margin-left: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover:not(:disabled) {
+    background: var(--sand);
+  }
 }
 
 .icon-button--primary {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
-.icon-button--primary:hover:not(:disabled) {
-  background: var(--accent);
-  color: #111111;
+@media (hover: hover) and (pointer: fine) {
+  .icon-button--primary:hover:not(:disabled) {
+    background: var(--ink-hover);
+  }
 }
 
 .icon-button:disabled {
   color: var(--disabled);
 }
 
-.playback-count {
-  align-items: center;
-  border-left: 1px solid var(--rule);
-  color: var(--muted);
-  display: flex;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  height: 30px;
-  margin-left: 4px;
-  min-width: 68px;
-  padding: 0 10px 0 13px;
-  text-align: center;
+.icon-button--primary:disabled {
+  background: var(--sand);
 }
 
+.playback-count {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+  margin: 0 10px 0 6px;
+  min-width: 44px;
+  white-space: nowrap;
+}
+
+/* Timeline */
+
 .timeline-panel {
-  background: var(--bg);
+  background: var(--canvas);
   min-width: 0;
   overflow: hidden;
   padding: 10px var(--gutter) 0;
 }
 
 .timeline {
-  background: var(--bg);
-  border-bottom: 1px solid var(--rule);
-  border-top: 1px solid var(--rule);
+  background: var(--canvas);
   display: flex;
   gap: 10px;
   height: 132px;
+  /* Side room for the selection ring, pulled back so cards align with the gutter. */
+  margin: 0 calc(-1 * var(--ring-reach));
   min-width: 0;
   overscroll-behavior-x: contain;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 8px 0 16px;
-  scrollbar-color: var(--rule-strong) transparent;
+  padding: 8px var(--ring-reach) 16px;
+  scrollbar-color: var(--hairline-strong) transparent;
   scrollbar-width: thin;
-  touch-action: pan-x;
-  width: 100%;
+  width: calc(100% + 2 * var(--ring-reach));
   -webkit-overflow-scrolling: touch;
 }
 
@@ -373,22 +506,41 @@ a:focus-visible {
 }
 
 .frame-card {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 0;
+  background: var(--raised);
+  border: 0;
+  border-radius: var(--radius-card);
   cursor: grab;
   flex-grow: 0;
   flex-shrink: 0;
   height: 106px;
   min-width: 70px;
-  overflow: hidden;
   position: relative;
-  transition: border-color 180ms ease, opacity 180ms ease;
+  transition: opacity 180ms ease;
 }
 
-.frame-card.is-selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 2px var(--accent);
+/* Drawn above the thumbnail so the hairline and selection ring stay visible. */
+.frame-card::after {
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: box-shadow 160ms ease;
+}
+
+/* SVG stroke drawn outside the card (see SelectionRing); the card no longer
+   clips its children, so the thumbnail clips itself to the card's corners. */
+.selection-ring {
+  fill: none;
+  height: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  stroke: var(--ring-color);
+  stroke-width: var(--ring-width);
+  width: 100%;
 }
 
 .frame-card.is-dragging {
@@ -397,6 +549,7 @@ a:focus-visible {
 }
 
 .frame-card > img {
+  border-radius: inherit;
   display: block;
   height: 100%;
   object-fit: contain;
@@ -406,10 +559,14 @@ a:focus-visible {
 
 .duration-control {
   align-items: center;
-  background: rgba(17, 17, 17, 0.82);
+  background: var(--chip);
+  border-radius: var(--radius-badge);
   bottom: 7px;
   color: #ffffff;
   display: flex;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
   height: 24px;
   left: 7px;
   padding: 0 7px;
@@ -421,11 +578,13 @@ a:focus-visible {
   background: transparent;
   border: 0;
   color: inherit;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  field-sizing: content;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  min-width: 3ch;
   padding: 0;
   text-align: right;
-  width: 30px;
 }
 
 .duration-control input::-webkit-inner-spin-button {
@@ -433,71 +592,88 @@ a:focus-visible {
 }
 
 .duration-control span {
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .frame-delete {
   align-items: center;
-  background: rgba(17, 17, 17, 0.82);
+  background: var(--chip);
   border: 0;
-  border-radius: 0;
+  border-radius: 9999px;
   color: #ffffff;
   display: flex;
   height: 28px;
   justify-content: center;
-  opacity: 0;
   padding: 0;
   position: absolute;
   right: 7px;
   top: 7px;
-  transition: opacity 160ms ease, background 160ms ease;
+  transition: opacity 160ms ease, background 160ms ease, transform 120ms var(--ease);
   width: 28px;
 }
 
-.frame-card:hover .frame-delete,
-.frame-delete:focus-visible {
-  opacity: 1;
+.frame-delete::before {
+  content: "";
+  inset: -6px;
+  position: absolute;
 }
 
-.frame-delete:hover {
-  background: var(--danger);
+@media (hover: hover) and (pointer: fine) {
+  .frame-delete {
+    opacity: 0;
+  }
+
+  .frame-card:hover .frame-delete,
+  .frame-card:focus-within .frame-delete {
+    opacity: 1;
+  }
+
+  .frame-delete:hover {
+    background: var(--danger);
+  }
 }
 
 .add-card {
   align-items: center;
-  background: transparent;
-  border: 1px dashed var(--rule-strong);
-  border-radius: 0;
+  background: var(--sand);
+  border: 0;
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
   color: var(--muted);
   display: flex;
   flex: 0 0 52px;
   height: 106px;
   justify-content: center;
   padding: 0;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, transform 120ms var(--ease);
 }
 
-.add-card:hover {
-  background: var(--surface);
-  border-color: var(--text);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .add-card:hover {
+    background: var(--stone);
+    color: var(--heading);
+  }
 }
 
-.add-card span:empty {
-  display: none;
+/* Same footprint as a frame card so the row keeps its height when frames arrive. */
+.timeline-placeholder {
+  align-items: center;
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--muted);
+  display: flex;
+  flex: 1 0 auto;
+  font-size: 13px;
+  height: 106px;
+  justify-content: center;
+  margin: 0;
 }
 
-.add-card--empty {
-  flex-basis: 150px;
-  font-size: 12px;
-  font-weight: 500;
-  gap: 7px;
-}
+/* Settings */
 
 .settings-strip {
   align-items: end;
-  background: var(--bg);
+  background: var(--canvas);
   column-gap: 18px;
   display: flex;
   flex-wrap: wrap;
@@ -506,11 +682,6 @@ a:focus-visible {
   overflow: visible;
   padding: 14px 0 18px;
   row-gap: 12px;
-  scrollbar-width: none;
-}
-
-.settings-strip::-webkit-scrollbar {
-  display: none;
 }
 
 .compact-control {
@@ -518,34 +689,31 @@ a:focus-visible {
   display: flex;
   flex: 0 0 96px;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
 .compact-control > span:not(.select-field):not(.number-field) {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
 }
 
 .compact-control select {
   appearance: none;
   align-items: center;
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 0;
-  color: var(--text);
+  background: var(--raised);
+  border: 0;
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--heading);
   display: flex;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
-  height: 32px;
-}
-
-.compact-control select {
+  height: 36px;
   min-width: 0;
-  padding: 0 32px 0 10px;
+  padding: 0 32px 0 12px;
+  transition: box-shadow 160ms ease;
   width: 100%;
 }
 
@@ -556,7 +724,7 @@ a:focus-visible {
 .select-field,
 .number-field {
   display: block;
-  height: 32px;
+  height: 36px;
   min-width: 0;
   position: relative;
 }
@@ -565,35 +733,48 @@ a:focus-visible {
   color: var(--muted);
   pointer-events: none;
   position: absolute;
-  right: 10px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
 }
 
 .number-field {
   align-items: center;
-  border: 1px solid var(--rule);
-  color: var(--text);
+  background: var(--raised);
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--heading);
   display: flex;
-  transition: border-color 160ms ease;
+  transition: box-shadow 160ms ease;
 }
 
-.number-field:hover,
+@media (hover: hover) and (pointer: fine) {
+  .number-field:hover {
+    box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  }
+}
+
 .number-field:focus-within {
-  border-color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+}
+
+.number-field:has(input:focus-visible) {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 .number-field input {
   appearance: textfield;
   background: transparent;
   border: 0;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  height: 30px;
+  color: var(--heading);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  height: 100%;
   min-width: 0;
   outline: 0;
-  padding: 0 4px 0 10px;
+  padding: 0 4px 0 12px;
   width: 100%;
 }
 
@@ -604,40 +785,48 @@ a:focus-visible {
 
 .number-field i {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   font-style: normal;
-  padding-right: 10px;
+  padding-right: 12px;
 }
 
-.compact-control select:hover,
-.size-control input:hover,
-.size-control button:hover {
-  border-color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .compact-control select:hover,
+  .size-control input:hover,
+  .size-control button:hover {
+    box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  }
+
+  .size-control button:hover {
+    background: var(--sand);
+  }
 }
 
 .size-control > div {
   align-items: center;
   display: flex;
-  gap: 5px;
+  gap: 6px;
 }
 
 .size-control {
-  flex-basis: 186px;
+  flex-basis: 194px;
 }
 
 .size-control input {
   appearance: textfield;
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 0;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  height: 32px;
+  background: var(--raised);
+  border: 0;
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--heading);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  height: 36px;
   min-width: 0;
   padding: 0 4px;
   text-align: center;
-  transition: border-color 160ms ease;
+  transition: box-shadow 160ms ease;
   width: 62px;
 }
 
@@ -647,23 +836,31 @@ a:focus-visible {
 
 .size-control i {
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 13px;
   font-style: normal;
 }
 
 .size-control button {
   align-items: center;
   background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 0;
-  color: var(--text);
+  border: 0;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--heading);
   display: flex;
-  height: 32px;
+  flex: 0 0 auto;
+  height: 36px;
   justify-content: center;
   padding: 0;
-  transition: border-color 160ms ease, background 160ms ease;
-  width: 32px;
+  position: relative;
+  transition: box-shadow 160ms ease, background 160ms ease, transform 120ms var(--ease);
+  width: 36px;
+}
+
+.size-control button::before {
+  content: "";
+  inset: -4px;
+  position: absolute;
 }
 
 .spinner {
@@ -680,38 +877,170 @@ a:focus-visible {
   display: none;
 }
 
+/* Toast */
+
 .toast {
   align-items: center;
-  background: var(--text);
-  border-left: 5px solid var(--accent);
-  box-shadow: var(--shadow);
-  color: var(--bg);
+  background: var(--ink);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+  color: var(--on-ink);
   display: flex;
-  font-size: 12px;
-  gap: 18px;
-  justify-content: space-between;
+  font-size: 13px;
+  gap: 10px;
   left: 50%;
   max-width: calc(100vw - 30px);
-  padding: 12px 12px 12px 14px;
+  padding: 8px 8px 8px 14px;
   position: fixed;
   top: 84px;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 50;
+  z-index: var(--z-toast);
+}
+
+.toast::before {
+  background: var(--danger);
+  border-radius: 9999px;
+  content: "";
+  flex: 0 0 8px;
+  height: 8px;
+}
+
+.toast > span {
+  flex: 1 1 auto;
+  margin-right: 4px;
 }
 
 .toast button {
   align-items: center;
   background: transparent;
   border: 0;
+  border-radius: 9999px;
   color: inherit;
   display: flex;
-  padding: 2px;
+  flex: 0 0 auto;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  transition: background 160ms ease, transform 120ms var(--ease);
+  width: 28px;
+}
+
+.toast button::before {
+  content: "";
+  inset: -8px;
+  position: absolute;
+}
+
+/* The default ink ring would vanish against the ink toast. */
+.toast button:focus-visible {
+  outline-color: var(--on-ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .toast button:hover {
+    background: color-mix(in srgb, var(--on-ink) 14%, transparent);
+  }
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Smoothed (squircle) corners where supported. A squircle reads tighter than a
+   circular arc at the same radius, so radii grow to keep the same overall size.
+   Pills and circles stay fully round. */
+@supports (corner-shape: squircle) {
+  :root {
+    --radius-panel: 24px;
+    --radius-card: 16px;
+    --radius-badge: 9px;
+  }
+
+  .preview-stage,
+  .empty-state,
+  .drop-overlay,
+  .frame-card,
+  .frame-card::after,
+  .frame-card > img,
+  .duration-control,
+  .add-card,
+  .timeline-placeholder,
+  .compact-control select,
+  .number-field,
+  .size-control input,
+  .toast {
+    corner-shape: squircle;
+  }
+}
+
+@media (max-height: 619px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    overflow: visible;
+  }
+}
+
+/* iOS zooms into inputs under 16px; touch also needs bigger targets. */
+@media (pointer: coarse) {
+  .duration-control input,
+  .number-field input,
+  .size-control input,
+  .compact-control select {
+    font-size: 16px;
+  }
+
+  .duration-control {
+    height: 32px;
+  }
+
+  .duration-control span {
+    font-size: 13px;
+  }
+
+  .compact-control select,
+  .select-field,
+  .number-field,
+  .size-control input,
+  .playback {
+    height: 40px;
+  }
+
+  .icon-button {
+    height: 34px;
+    width: 34px;
+  }
+
+  /* 2px gaps between playback buttons, so 1px each side never overlaps. */
+  .icon-button::before {
+    inset: -5px -1px;
+  }
+
+  .size-control button {
+    height: 40px;
+    width: 40px;
+  }
+
+  .frame-delete::before {
+    inset: -8px;
+  }
+
+  .button::before,
+  .theme-toggle::before {
+    content: "";
+    inset: -3px;
+    position: absolute;
+  }
+
+  .button,
+  .theme-toggle {
+    position: relative;
   }
 }
 
@@ -764,13 +1093,10 @@ a:focus-visible {
   }
 
   .preview-stage {
-    height: min(66vh, 620px);
+    height: min(66svh, 620px);
     margin-top: 16px;
     min-height: 390px;
-  }
-
-  .preview-canvas {
-    max-width: 96%;
+    padding: 20px;
   }
 
   .timeline-panel {
@@ -779,7 +1105,6 @@ a:focus-visible {
 
   .settings-strip {
     align-items: stretch;
-    border-bottom: 1px solid var(--rule);
     display: grid;
     gap: 18px 12px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -804,10 +1129,6 @@ a:focus-visible {
   .size-control input {
     flex: 1;
   }
-
-  .privacy-compact {
-    align-self: end;
-  }
 }
 
 @media (max-width: 520px) {
@@ -819,6 +1140,7 @@ a:focus-visible {
 
   .button--primary {
     font-size: 0;
+    gap: 0;
     min-width: 38px;
     padding: 0;
     width: 38px;
@@ -828,12 +1150,11 @@ a:focus-visible {
     margin-left: 12px;
     margin-right: 12px;
     min-height: 360px;
+    padding: 16px;
   }
 
   .empty-state {
-    height: 100%;
     padding: 14px;
-    width: 100%;
   }
 
   .timeline-panel {
@@ -846,10 +1167,6 @@ a:focus-visible {
     margin-left: 12px;
     margin-right: 12px;
   }
-
-  .privacy-compact {
-    justify-self: start;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -859,5 +1176,27 @@ a:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.credits {
+  align-self: end;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0 0 8px auto;
+  white-space: nowrap;
+}
+
+.credits a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .credits a:hover {
+    opacity: 0.8;
   }
 }
