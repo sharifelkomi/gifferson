@@ -256,10 +256,10 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
         void sendNextFrame();
       } else if (message.type === "frame-done") {
         nextFrame = (message.index ?? nextFrame) + 1;
-        onProgress((nextFrame / frames.length) * 0.5);
+        onProgress((nextFrame / frames.length) * 0.9);
         void sendNextFrame();
       } else if (message.type === "encoding") {
-        onProgress(0.55);
+        onProgress(0.92);
       } else if (message.type === "complete" && message.buffer) {
         worker.terminate();
         resolve(new Blob([message.buffer], { type: "image/gif" }));
