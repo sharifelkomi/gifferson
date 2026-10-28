@@ -15,7 +15,7 @@ npm run dev
 - Preview, reorder, remove, and retime frames.
 - Set frame timing, looping, output dimensions, quality, and image fit.
 - Export above 800px with no artificial resolution cap.
-- Detect the first imported frame's dimensions and apply them to the canvas automatically.
+- Detect the first imported frame's dimensions and apply them to the canvas automatically, fitted to 1920px on the long edge (larger sizes can be typed in).
 - Encode with Gifski WebAssembly inside a dedicated browser worker.
 
 ## Build and deploy

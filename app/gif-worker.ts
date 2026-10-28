@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
-import gifskiEncode from "gifski-wasm/multi-thread";
+import encodeSingleThread, { init as initSingleThread } from "gifski-wasm";
+import encodeMultiThread, { init as initMultiThread } from "gifski-wasm/multi-thread";
 
 type StartMessage = {
   type: "start";
@@ -9,6 +10,8 @@ type StartMessage = {
   frameCount: number;
   repeat: number;
   quality: number;
+  threads: boolean;
+  batchPixels: number;
 };
 
 type FrameMessage = {
@@ -21,11 +24,12 @@ type FrameMessage = {
 type FinishMessage = { type: "finish" };
 type WorkerMessage = StartMessage | FrameMessage | FinishMessage;
 
-// The multi-threaded Gifski build has a 1 GB memory cap and receives every
-// frame at once. Past roughly 40M pixels its threads run out of memory and
-// deadlock instead of throwing, so frames are encoded in batches that stay
-// well under that and the batches are stitched into one GIF.
-const BATCH_PIXEL_BUDGET = 16_000_000;
+// Gifski receives every frame of a batch at once. The multi-threaded build has
+// a 1 GB memory cap, and past roughly 40M pixels its threads run out of memory
+// and deadlock instead of throwing, so frames are encoded in batches that stay
+// well under that (the page sets the budget) and stitched into one GIF.
+let batchPixels = 16_000_000;
+let gifskiEncode = encodeMultiThread;
 
 let width = 0;
 let height = 0;
@@ -126,6 +130,16 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       sourceFrameCount = message.frameCount;
       repeat = message.repeat;
       quality = message.quality;
+      batchPixels = message.batchPixels;
+      // Start the encoder before reporting ready, so a thread pool that fails
+      // to start is reported now instead of hanging the first encode.
+      if (message.threads) {
+        await initMultiThread();
+        gifskiEncode = encodeMultiThread;
+      } else {
+        await initSingleThread();
+        gifskiEncode = encodeSingleThread;
+      }
       frames = [];
       frameDurations = [];
       receivedCount = 0;
@@ -140,7 +154,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       receivedCount += 1;
       // Never leave a single frame for the last batch, since Gifski needs two.
       const remaining = sourceFrameCount - receivedCount;
-      if (frames.length * width * height >= BATCH_PIXEL_BUDGET && frames.length > 1 && remaining !== 1) {
+      if (frames.length * width * height >= batchPixels && frames.length > 1 && remaining !== 1) {
         await encodeBatch();
       }
       self.postMessage({ type: "frame-done", index: message.index });
