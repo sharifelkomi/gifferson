@@ -10,9 +10,9 @@
   --on-ink: #fbfaf9;
   --heading: #343433;
   --body: #474645;
-  --muted: #7e7e7d;
+  --muted: #6b6a69;
   --disabled: #b5b2ad;
-  --link: #ff3e00;
+  --link: #d03300;
   --danger: #ff2b3a;
   --overlay: rgba(251, 250, 249, 0.94);
   --shadow-float: 0 0 24px rgba(0, 0, 0, 0.15);
@@ -155,6 +155,7 @@ a:focus-visible {
 
 .brand {
   align-items: baseline;
+  margin: 0;
   color: var(--ink);
   display: inline-flex;
   font-size: 17px;
@@ -895,6 +896,18 @@ a:focus-visible {
   display: none;
 }
 
+.sr-only {
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 /* Toast */
 
 .toast {
@@ -1188,14 +1201,28 @@ a:focus-visible {
   }
 }
 
+/* Fades and color changes stay; the press-scale movement goes, and the
+   spinner keeps turning (it's the only sign of progress) but slower. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  .button:active:not(:disabled),
+  .theme-toggle:active:not(:disabled),
+  .icon-button:active:not(:disabled),
+  .add-card:active,
+  .size-control button:active,
+  .frame-delete:active,
+  .toast button:active {
+    transform: none;
   }
+
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+/* Set for one frame while the theme switches, so colors flip together. */
+.no-transitions,
+.no-transitions * {
+  transition: none !important;
 }
 
 .credits {

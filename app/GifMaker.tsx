@@ -19,6 +19,7 @@ import {
 import {
   ChangeEvent,
   DragEvent,
+  InputHTMLAttributes,
   WheelEvent,
   useCallback,
   useEffect,
@@ -129,6 +130,37 @@ function IconButton({
   );
 }
 
+// A number field that keeps what's typed while it's being edited, so clearing
+// it to type a new value doesn't snap to the minimum mid-edit. Only valid
+// values are committed; on blur it shows the committed value again.
+function NumberInput({
+  value,
+  min,
+  onCommit,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "min" | "onChange" | "onBlur" | "type"> & {
+  value: number;
+  min: number;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      {...props}
+      type="number"
+      min={min}
+      value={draft ?? String(value)}
+      onChange={(event) => {
+        const text = event.target.value;
+        setDraft(text);
+        const next = Number(text);
+        if (text !== "" && Number.isFinite(next) && next >= min) onCommit(next);
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
+}
+
 export default function GifMaker() {
   const [frames, setFrames] = useState<GifFrame[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -157,8 +189,13 @@ export default function GifMaker() {
   const dragScrollSpeedRef = useRef(0);
 
   const toggleTheme = () => {
-    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = nextTheme;
+    const root = document.documentElement;
+    const nextTheme = root.dataset.theme === "dark" ? "light" : "dark";
+    // Without this every control tweens its colors at its own speed.
+    root.classList.add("no-transitions");
+    root.dataset.theme = nextTheme;
+    void getComputedStyle(root).backgroundColor;
+    root.classList.remove("no-transitions");
     document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
       meta.content = nextTheme === "dark" ? "#161514" : "#fbfaf9";
     });
@@ -444,9 +481,7 @@ export default function GifMaker() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Gifferson home">
-          <span>Gifferson</span>
-        </a>
+        <h1 className="brand">Gifferson</h1>
 
         <div className="stats" aria-label="Animation summary">
           <span>{frames.length} {frames.length === 1 ? "frame" : "frames"}</span>
@@ -488,7 +523,7 @@ export default function GifMaker() {
           <button
             className="button button--primary"
             type="button"
-            aria-label="Export GIF"
+            aria-label={isExporting ? `Exporting GIF, ${Math.round(progress * 100)}%` : "Export GIF"}
             title="Export GIF"
             disabled={!frames.length || isExporting}
             onClick={handleExport}
@@ -566,6 +601,7 @@ export default function GifMaker() {
                 key={frame.id}
                 className={`frame-card${frame.id === selectedFrame?.id ? " is-selected" : ""}${draggingId === frame.id ? " is-dragging" : ""}`}
                 style={{ flexBasis: Math.max(70, Math.round(106 * frame.width / Math.max(1, frame.height))) }}
+                aria-current={frame.id === selectedFrame?.id ? "true" : undefined}
                 draggable
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = "move";
@@ -580,18 +616,17 @@ export default function GifMaker() {
                 aria-label={`Frame ${index + 1}: ${frame.name}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={frame.url} alt="" />
+                <img src={frame.url} alt="" loading="lazy" decoding="async" />
                 <label className="duration-control" onClick={(event) => event.stopPropagation()}>
-                  <input
+                  <NumberInput
                     aria-label={`Frame ${index + 1} duration in seconds`}
-                    type="number"
                     inputMode="decimal"
                     enterKeyHint="done"
-                    min="0.02"
+                    min={0.02}
                     max="60"
                     step="0.01"
                     value={Number(frame.duration.toFixed(2))}
-                    onChange={(event) => updateDuration(frame.id, Number(event.target.value))}
+                    onCommit={(duration) => updateDuration(frame.id, duration)}
                   />
                   <span>s</span>
                 </label>
@@ -608,8 +643,13 @@ export default function GifMaker() {
             ))}
 
             {frames.length ? (
-              <button className="add-card" type="button" aria-label="Add frames" onClick={() => inputRef.current?.click()}>
-                <Plus size={21} aria-hidden="true" />
+              <button
+                className="add-card"
+                type="button"
+                aria-label={isImporting ? "Adding frames" : "Add frames"}
+                onClick={() => inputRef.current?.click()}
+              >
+                {isImporting ? <span className="spinner" aria-hidden="true" /> : <Plus size={21} aria-hidden="true" />}
               </button>
             ) : (
               <p className="timeline-placeholder">Your frames will appear here</p>
@@ -674,9 +714,9 @@ export default function GifMaker() {
           <div className="compact-control size-control">
             <span>Size</span>
             <div>
-              <input aria-label="Output width" type="number" inputMode="numeric" enterKeyHint="done" min="1" max="8192" value={width} onChange={(event) => updateWidth(Number(event.target.value))} />
+              <NumberInput aria-label="Output width" inputMode="numeric" enterKeyHint="done" min={1} max="8192" value={width} onCommit={updateWidth} />
               <i>×</i>
-              <input aria-label="Output height" type="number" inputMode="numeric" enterKeyHint="done" min="1" max="8192" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
+              <NumberInput aria-label="Output height" inputMode="numeric" enterKeyHint="done" min={1} max="8192" value={height} onCommit={updateHeight} />
               <button type="button" onClick={toggleLock} aria-label={locked ? "Unlock aspect ratio" : "Lock aspect ratio"}>
                 {locked ? <Lock size={11} /> : <Unlock size={11} />}
               </button>
@@ -714,6 +754,10 @@ export default function GifMaker() {
           </p>
         </div>
       </section>
+
+      <p className="sr-only" role="status">
+        {isImporting ? "Adding frames…" : isExporting ? "Exporting GIF…" : ""}
+      </p>
 
       <input ref={inputRef} className="file-input" type="file" accept={ACCEPTED_FILES} multiple onChange={onFileChange} />
 

@@ -266,7 +266,12 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
         worker.terminate();
         resolve(new Blob([message.buffer], { type: "image/gif" }));
       } else if (message.type === "error") {
-        fail(new Error(message.message || "GIF encoding failed."));
+        // WASM traps (usually running out of memory) surface as bare
+        // "unreachable" or "memory access out of bounds" messages.
+        const isWasmTrap = /unreachable|out of bounds|memory/i.test(message.message ?? "");
+        fail(new Error(isWasmTrap
+          ? "This GIF is too big to make in the browser. Try a smaller size or fewer frames."
+          : message.message || "GIF encoding failed."));
       }
     };
 
