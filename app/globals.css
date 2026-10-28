@@ -166,6 +166,12 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.brand__mark {
+  display: block;
+  height: 20px;
+  width: auto;
+}
+
 .stats {
   align-items: center;
   color: var(--muted);
@@ -255,6 +261,11 @@ a:focus-visible {
   background: var(--raised);
   box-shadow: var(--shadow-raised);
   color: var(--heading);
+}
+
+/* Same width as Clear all, so swapping to Undo doesn't nudge the top bar. */
+.button--secondary {
+  min-width: 102px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -892,6 +903,40 @@ a:focus-visible {
   width: 13px;
 }
 
+/* Undo countdown: the ring empties over the undo window. Keyboard focus on
+   the button holds it, so there's time to read and press it. */
+.countdown {
+  height: 14px;
+  transform: rotate(-90deg);
+  width: 14px;
+}
+
+.countdown circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.countdown__track {
+  opacity: 0.18;
+}
+
+.countdown__bar {
+  animation: countdown linear forwards;
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+}
+
+.button:focus-visible .countdown__bar {
+  animation-play-state: paused;
+}
+
+@keyframes countdown {
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+
 .file-input {
   display: none;
 }
@@ -910,6 +955,20 @@ a:focus-visible {
 
 /* Toast */
 
+.toasts {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  left: 50%;
+  pointer-events: none;
+  position: fixed;
+  top: 84px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: var(--z-toast);
+}
+
 .toast {
   align-items: center;
   background: var(--ink);
@@ -919,14 +978,10 @@ a:focus-visible {
   display: flex;
   font-size: 13px;
   gap: 10px;
-  left: 50%;
   max-width: calc(100vw - 30px);
   padding: 8px 8px 8px 14px;
-  position: fixed;
-  top: 84px;
-  transform: translateX(-50%);
+  pointer-events: auto;
   width: max-content;
-  z-index: var(--z-toast);
 }
 
 .toast::before {

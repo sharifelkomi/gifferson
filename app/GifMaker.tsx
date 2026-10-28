@@ -35,9 +35,14 @@ import {
   GifFrame,
   LoopMode,
   QualityMode,
+  revokeFrameUrls,
 } from "./gif-utils";
+import Wordmark from "./Wordmark";
 
 const ACCEPTED_FILES = "image/png,image/jpeg,image/webp,image/gif,image/bmp";
+const UNDO_TIMEOUT = 8000;
+
+type PendingClear = { frames: GifFrame[]; selectedId: string | null; clearedAt: number };
 
 function durationLabel(seconds: number) {
   if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
@@ -181,6 +186,9 @@ export default function GifMaker() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [previewArea, setPreviewArea] = useState({ width: 0, height: 0 });
+  const [pendingClear, setPendingClear] = useState<PendingClear | null>(null);
+  // Mirrors pendingClear so cleanup paths see the stash without a render.
+  const pendingClearRef = useRef<PendingClear | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const framesRef = useRef<GifFrame[]>([]);
   const previewStageRef = useRef<HTMLDivElement>(null);
@@ -226,9 +234,45 @@ export default function GifMaker() {
 
   useEffect(() => {
     return () => {
-      framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.url));
+      framesRef.current.forEach(revokeFrameUrls);
+      pendingClearRef.current?.frames.forEach(revokeFrameUrls);
     };
   }, []);
+
+  const dismissUndo = useCallback(() => {
+    pendingClearRef.current = null;
+    setPendingClear(null);
+  }, []);
+
+  // Cleared frames keep their object URLs until the undo window closes.
+  const finalizeClear = useCallback(() => {
+    const pending = pendingClearRef.current;
+    if (!pending) return;
+    pending.frames.forEach(revokeFrameUrls);
+    dismissUndo();
+  }, [dismissUndo]);
+
+  const undoClear = useCallback(() => {
+    const pending = pendingClearRef.current;
+    if (!pending) return;
+    dismissUndo();
+    setFrames(pending.frames);
+    setSelectedId(pending.selectedId);
+  }, [dismissUndo]);
+
+  useEffect(() => {
+    if (!pendingClear) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "z") return;
+      // Fields keep their own native undo.
+      if (event.target instanceof Element && event.target.closest("input, select, textarea, [contenteditable]")) return;
+      event.preventDefault();
+      undoClear();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pendingClear, undoClear]);
 
   const selectedIndex = useMemo(() => {
     const index = frames.findIndex((frame) => frame.id === selectedId);
@@ -250,6 +294,7 @@ export default function GifMaker() {
   const importFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
     if (!files.length) return;
+    finalizeClear();
     const shouldApplyDetectedSize = framesRef.current.length === 0;
     setError(null);
     setIsImporting(true);
@@ -257,6 +302,8 @@ export default function GifMaker() {
     try {
       const { decoded, rejected } = await decodeFiles(files);
       if (decoded.length) {
+        // An import that started before a clear would otherwise be lost on undo.
+        finalizeClear();
         const nextFrames = decoded.map((frame) => ({
           ...frame,
           duration: frame.duration === 0.5 ? defaultDuration : frame.duration,
@@ -280,7 +327,7 @@ export default function GifMaker() {
       setIsImporting(false);
       if (inputRef.current) inputRef.current.value = "";
     }
-  }, [defaultDuration]);
+  }, [defaultDuration, finalizeClear]);
 
   useEffect(() => {
     if (!isPlaying || !selectedFrame) return;
@@ -310,7 +357,7 @@ export default function GifMaker() {
     const index = frames.findIndex((frame) => frame.id === id);
     const frame = frames[index];
     if (!frame) return;
-    URL.revokeObjectURL(frame.url);
+    revokeFrameUrls(frame);
     const next = frames.filter((item) => item.id !== id);
     setFrames(next);
     if (selectedId === id) {
@@ -320,7 +367,11 @@ export default function GifMaker() {
   };
 
   const clearAll = () => {
-    frames.forEach((frame) => URL.revokeObjectURL(frame.url));
+    if (!frames.length) return;
+    finalizeClear();
+    const pending = { frames, selectedId, clearedAt: Date.now() };
+    pendingClearRef.current = pending;
+    setPendingClear(pending);
     setFrames([]);
     setSelectedId(null);
     setIsPlaying(false);
@@ -481,7 +532,10 @@ export default function GifMaker() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <h1 className="brand">Gifferson</h1>
+        <h1 className="brand">
+          <Wordmark className="brand__mark" aria-hidden="true" />
+          <span className="sr-only">Gifferson</span>
+        </h1>
 
         <div className="stats" aria-label="Animation summary">
           <span>{frames.length} {frames.length === 1 ? "frame" : "frames"}</span>
@@ -500,25 +554,33 @@ export default function GifMaker() {
             <Moon className="theme-icon theme-icon--moon" size={15} aria-hidden="true" />
             <Sun className="theme-icon theme-icon--sun" size={15} aria-hidden="true" />
           </button>
+          {/* For a few seconds after clearing, this button becomes Undo; the
+              ring empties as the window closes, and finalizes when it ends. */}
           <button
-            className="theme-toggle add-toggle"
+            className={`button button--secondary${pendingClear ? "" : " button--danger"}`}
             type="button"
-            aria-label="Add frames"
-            title="Add frames"
-            onClick={() => inputRef.current?.click()}
+            aria-label={pendingClear ? "Undo clear all" : "Clear all frames"}
+            title={pendingClear ? "Undo clear all" : "Clear all frames"}
+            disabled={!frames.length && !pendingClear}
+            onClick={pendingClear ? undoClear : clearAll}
           >
-            <Plus size={15} aria-hidden="true" />
-          </button>
-          <button
-            className="button button--secondary button--danger"
-            type="button"
-            aria-label="Clear all frames"
-            title="Clear all frames"
-            disabled={!frames.length}
-            onClick={clearAll}
-          >
-            <Trash2 size={14} aria-hidden="true" />
-            Clear all
+            {pendingClear ? (
+              <svg key={pendingClear.clearedAt} className="countdown" viewBox="0 0 16 16" aria-hidden="true">
+                <circle className="countdown__track" cx="8" cy="8" r="6" />
+                <circle
+                  className="countdown__bar"
+                  cx="8"
+                  cy="8"
+                  r="6"
+                  pathLength={1}
+                  style={{ animationDuration: `${UNDO_TIMEOUT}ms` }}
+                  onAnimationEnd={finalizeClear}
+                />
+              </svg>
+            ) : (
+              <Trash2 size={14} aria-hidden="true" />
+            )}
+            {pendingClear ? "Undo" : "Clear all"}
           </button>
           <button
             className="button button--primary"
@@ -616,7 +678,7 @@ export default function GifMaker() {
                 aria-label={`Frame ${index + 1}: ${frame.name}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={frame.url} alt="" loading="lazy" decoding="async" />
+                <img src={frame.thumbUrl} alt="" loading="lazy" decoding="async" />
                 <label className="duration-control" onClick={(event) => event.stopPropagation()}>
                   <NumberInput
                     aria-label={`Frame ${index + 1} duration in seconds`}
@@ -756,15 +818,23 @@ export default function GifMaker() {
       </section>
 
       <p className="sr-only" role="status">
-        {isImporting ? "Adding frames…" : isExporting ? "Exporting GIF…" : ""}
+        {isImporting
+          ? "Adding frames…"
+          : isExporting
+            ? "Exporting GIF…"
+            : pendingClear
+              ? `Cleared ${pendingClear.frames.length} ${pendingClear.frames.length === 1 ? "frame" : "frames"}. Press Undo to restore.`
+              : ""}
       </p>
 
       <input ref={inputRef} className="file-input" type="file" accept={ACCEPTED_FILES} multiple onChange={onFileChange} />
 
       {error && (
-        <div className="toast" role="alert">
-          <span>{error}</span>
-          <button type="button" aria-label="Dismiss error" onClick={() => setError(null)}><X size={16} /></button>
+        <div className="toasts">
+          <div className="toast" role="alert">
+            <span>{error}</span>
+            <button type="button" aria-label="Dismiss error" onClick={() => setError(null)}><X size={16} /></button>
+          </div>
         </div>
       )}
     </main>

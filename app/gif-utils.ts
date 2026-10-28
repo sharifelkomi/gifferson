@@ -8,6 +8,8 @@ export type GifFrame = {
   id: string;
   name: string;
   url: string;
+  // A small copy for the timeline; the preview and export use `url`.
+  thumbUrl: string;
   width: number;
   height: number;
   duration: number;
@@ -25,33 +27,74 @@ function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, type = "image/png") {
+// Timeline cards are 106px tall; twice that stays sharp on retina screens.
+const THUMB_HEIGHT = 212;
+
+function canvasToBlob(canvas: HTMLCanvasElement, type = "image/png", quality?: number) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
       else reject(new Error("This image could not be prepared."));
-    }, type);
+    }, type, quality);
   });
 }
 
-async function imageDimensions(url: string) {
-  const image = new Image();
-  image.decoding = "async";
-  image.src = url;
-  await image.decode();
-  return { width: image.naturalWidth, height: image.naturalHeight };
+export function revokeFrameUrls(frame: GifFrame) {
+  URL.revokeObjectURL(frame.url);
+  // Small images use the full image as their thumbnail.
+  if (frame.thumbUrl !== frame.url) URL.revokeObjectURL(frame.thumbUrl);
+}
+
+// Browsers without WebP encoding hand back a PNG instead, which is fine here.
+async function drawThumbnail(
+  canvas: HTMLCanvasElement,
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+) {
+  canvas.height = THUMB_HEIGHT;
+  canvas.width = Math.max(1, Math.round((width * THUMB_HEIGHT) / height));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Your browser could not create a thumbnail canvas.");
+  context.imageSmoothingQuality = "high";
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return URL.createObjectURL(await canvasToBlob(canvas, "image/webp", 0.85));
+}
+
+async function staticThumbnail(file: File, image: HTMLImageElement, url: string) {
+  const { naturalWidth: width, naturalHeight: height } = image;
+  if (height <= THUMB_HEIGHT) return url;
+  let bitmap: ImageBitmap | null = null;
+  try {
+    // Resizing while decoding avoids holding a second full-size copy.
+    bitmap = await createImageBitmap(file, { resizeHeight: THUMB_HEIGHT, resizeQuality: "high" });
+  } catch {
+    // Fall back to drawing the already decoded image.
+  }
+  try {
+    return await drawThumbnail(document.createElement("canvas"), bitmap ?? image, width, height);
+  } catch {
+    return url;
+  } finally {
+    bitmap?.close();
+  }
 }
 
 async function decodeStaticImage(file: File): Promise<GifFrame[]> {
   const url = URL.createObjectURL(file);
   try {
-    const dimensions = await imageDimensions(url);
+    const image = new Image();
+    image.decoding = "async";
+    image.src = url;
+    await image.decode();
     return [
       {
         id: uid(),
         name: file.name.replace(/\.[^.]+$/, ""),
         url,
-        ...dimensions,
+        thumbUrl: await staticThumbnail(file, image, url),
+        width: image.naturalWidth,
+        height: image.naturalHeight,
         duration: 0.5,
       },
     ];
@@ -76,48 +119,59 @@ async function decodeAnimatedGif(file: File): Promise<GifFrame[]> {
   const patchContext = patchCanvas.getContext("2d");
   if (!patchContext) throw new Error("Your browser could not decode this GIF.");
 
+  const thumbCanvas = document.createElement("canvas");
+  const needsThumbnail = canvas.height > THUMB_HEIGHT;
   const result: GifFrame[] = [];
   const baseName = file.name.replace(/\.[^.]+$/, "");
 
-  for (let index = 0; index < sourceFrames.length; index += 1) {
-    const frame = sourceFrames[index];
-    const before = frame.disposalType === 3
-      ? context.getImageData(0, 0, canvas.width, canvas.height)
-      : null;
+  try {
+    for (let index = 0; index < sourceFrames.length; index += 1) {
+      const frame = sourceFrames[index];
+      const before = frame.disposalType === 3
+        ? context.getImageData(0, 0, canvas.width, canvas.height)
+        : null;
 
-    patchCanvas.width = frame.dims.width;
-    patchCanvas.height = frame.dims.height;
-    patchContext.putImageData(
-      new ImageData(
-        new Uint8ClampedArray(frame.patch),
-        frame.dims.width,
-        frame.dims.height,
-      ),
-      0,
-      0,
-    );
-    context.drawImage(patchCanvas, frame.dims.left, frame.dims.top);
-
-    const blob = await canvasToBlob(canvas);
-    result.push({
-      id: uid(),
-      name: `${baseName} ${index + 1}`,
-      url: URL.createObjectURL(blob),
-      width: canvas.width,
-      height: canvas.height,
-      duration: Math.max(0.02, (frame.delay || 100) / 1000),
-    });
-
-    if (frame.disposalType === 2) {
-      context.clearRect(
-        frame.dims.left,
-        frame.dims.top,
-        frame.dims.width,
-        frame.dims.height,
+      patchCanvas.width = frame.dims.width;
+      patchCanvas.height = frame.dims.height;
+      patchContext.putImageData(
+        new ImageData(
+          new Uint8ClampedArray(frame.patch),
+          frame.dims.width,
+          frame.dims.height,
+        ),
+        0,
+        0,
       );
-    } else if (frame.disposalType === 3 && before) {
-      context.putImageData(before, 0, 0);
+      context.drawImage(patchCanvas, frame.dims.left, frame.dims.top);
+
+      const url = URL.createObjectURL(await canvasToBlob(canvas));
+      const thumbUrl = needsThumbnail
+        ? await drawThumbnail(thumbCanvas, canvas, canvas.width, canvas.height).catch(() => url)
+        : url;
+      result.push({
+        id: uid(),
+        name: `${baseName} ${index + 1}`,
+        url,
+        thumbUrl,
+        width: canvas.width,
+        height: canvas.height,
+        duration: Math.max(0.02, (frame.delay || 100) / 1000),
+      });
+
+      if (frame.disposalType === 2) {
+        context.clearRect(
+          frame.dims.left,
+          frame.dims.top,
+          frame.dims.width,
+          frame.dims.height,
+        );
+      } else if (frame.disposalType === 3 && before) {
+        context.putImageData(before, 0, 0);
+      }
     }
+  } catch (error) {
+    result.forEach(revokeFrameUrls);
+    throw error;
   }
 
   return result;

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { preload } from "react-dom";
 import "@fontsource-variable/inter";
+import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -28,6 +30,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Only the Latin file: the other subsets load on demand via unicode-range.
+  preload(interLatin, { as: "font", type: "font/woff2", crossOrigin: "" });
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
