@@ -22,6 +22,7 @@ import {
   WheelEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -41,6 +42,64 @@ function durationLabel(seconds: number) {
   if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${Math.round(seconds % 60)}s`;
+}
+
+// Path for a ring that sits `offset` px outside a rounded box. Each corner is the
+// box's own corner curve (a superellipse; squircle or circle) pushed out along its
+// normal, so the stroke's two edges and the gap stay exactly parallel. CSS can't
+// do this: it draws the inner and outer edges as two separate superellipses.
+function ringPath(width: number, height: number, radius: number, exponent: number, offset: number) {
+  const r = Math.min(radius, width / 2, height / 2);
+  const steps = 48;
+  const corners: [number, number, number, number, boolean][] = [
+    [width - r, height - r, 1, 1, false],
+    [r, height - r, -1, 1, true],
+    [r, r, -1, -1, false],
+    [width - r, r, 1, -1, true],
+  ];
+  const points: string[] = [];
+  for (const [cx, cy, sx, sy, reverse] of corners) {
+    for (let i = 0; i <= steps; i++) {
+      const t = ((reverse ? steps - i : i) / steps) * (Math.PI / 2);
+      const x = Math.cos(t) ** (2 / exponent);
+      const y = Math.sin(t) ** (2 / exponent);
+      const nx = x ** (exponent - 1);
+      const ny = y ** (exponent - 1);
+      const length = Math.hypot(nx, ny) || 1;
+      points.push(
+        `${(cx + sx * (r * x + (offset * nx) / length)).toFixed(2)} ${(cy + sy * (r * y + (offset * ny) / length)).toFixed(2)}`,
+      );
+    }
+  }
+  return `M${points.join("L")}Z`;
+}
+
+function SelectionRing() {
+  const ref = useRef<SVGSVGElement>(null);
+  const [path, setPath] = useState("");
+
+  useLayoutEffect(() => {
+    const card = ref.current?.parentElement;
+    if (!card) return;
+    const update = () => {
+      const style = getComputedStyle(card);
+      const shape = style.getPropertyValue("corner-top-left-shape");
+      const k = Number(/superellipse\(([-\d.]+)\)/.exec(shape)?.[1] ?? 1);
+      const gap = parseFloat(style.getPropertyValue("--ring-gap")) || 2;
+      const offset = gap + (parseFloat(style.getPropertyValue("--ring-width")) || 2) / 2;
+      setPath(ringPath(card.offsetWidth, card.offsetHeight, parseFloat(style.borderTopLeftRadius) || 0, 2 ** k, offset));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <svg ref={ref} className="selection-ring" aria-hidden="true">
+      <path d={path} />
+    </svg>
+  );
 }
 
 function IconButton({
@@ -100,6 +159,9 @@ export default function GifMaker() {
   const toggleTheme = () => {
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = nextTheme;
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+      meta.content = nextTheme === "dark" ? "#161514" : "#fbfaf9";
+    });
     window.localStorage.setItem("gifferson-theme", nextTheme);
   };
 
@@ -412,17 +474,16 @@ export default function GifMaker() {
           >
             <Plus size={15} aria-hidden="true" />
           </button>
-          {frames.length > 0 && (
-            <button
-              className="theme-toggle delete-toggle"
-              type="button"
-              aria-label="Clear all frames"
-              title="Clear all frames"
-              onClick={clearAll}
-            >
-              <Trash2 size={15} aria-hidden="true" />
-            </button>
-          )}
+          <button
+            className="theme-toggle delete-toggle"
+            type="button"
+            aria-label="Clear all frames"
+            title="Clear all frames"
+            disabled={!frames.length}
+            onClick={clearAll}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+          </button>
           <button
             className="button button--primary"
             type="button"
@@ -431,7 +492,7 @@ export default function GifMaker() {
             disabled={!frames.length || isExporting}
             onClick={handleExport}
           >
-            {isExporting ? <span className="spinner" /> : <Download size={14} />}
+            {isExporting ? <span className="spinner" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
             {isExporting ? `${Math.round(progress * 100)}%` : "Export GIF"}
           </button>
         </div>
@@ -473,10 +534,11 @@ export default function GifMaker() {
             <button
               className="empty-state"
               type="button"
-              aria-label="Choose images. Supported formats: PNG, JPG, WebP, BMP, or GIF"
               onClick={() => inputRef.current?.click()}
             >
-              <span>{isImporting ? "Preparing images…" : "PNG, JPG, WebP, BMP, or GIF"}</span>
+              <strong>{isImporting ? "Preparing images…" : "Drop images here or click to choose"}</strong>
+              <span>PNG, JPG, WebP, BMP, or GIF</span>
+              {!isImporting && <span className="empty-state__cta">Choose images</span>}
             </button>
           )}
 
@@ -522,6 +584,8 @@ export default function GifMaker() {
                   <input
                     aria-label={`Frame ${index + 1} duration in seconds`}
                     type="number"
+                    inputMode="decimal"
+                    enterKeyHint="done"
                     min="0.02"
                     max="60"
                     step="0.01"
@@ -538,13 +602,17 @@ export default function GifMaker() {
                 >
                   <Trash2 size={13} fill="currentColor" />
                 </button>
+                {frame.id === selectedFrame?.id && <SelectionRing />}
               </article>
             ))}
 
-            <button className={`add-card${frames.length ? "" : " add-card--empty"}`} type="button" onClick={() => inputRef.current?.click()}>
-              <Plus size={frames.length ? 21 : 16} />
-              <span>{frames.length ? "" : "Add frames"}</span>
-            </button>
+            {frames.length ? (
+              <button className="add-card" type="button" aria-label="Add frames" onClick={() => inputRef.current?.click()}>
+                <Plus size={21} aria-hidden="true" />
+              </button>
+            ) : (
+              <p className="timeline-placeholder">Your frames will appear here</p>
+            )}
           </div>
         </div>
 
@@ -561,7 +629,7 @@ export default function GifMaker() {
                 primary
                 onClick={() => setIsPlaying((current) => !current)}
               >
-                {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play className="play-icon" size={16} fill="currentColor" />}
               </IconButton>
               <IconButton label="Next frame" disabled={!frames.length} onClick={selectNext}>
                 <SkipForward size={15} fill="currentColor" />
@@ -579,6 +647,7 @@ export default function GifMaker() {
                 aria-label="Default frame duration in seconds"
                 type="number"
                 inputMode="decimal"
+                enterKeyHint="done"
                 min="0.02"
                 step="0.01"
                 value={durationDraft}
@@ -595,7 +664,7 @@ export default function GifMaker() {
               <select value={loop} onChange={(event) => setLoop(event.target.value as LoopMode)}>
                 <option value="forever">Infinite</option>
                 <option value="once">Once</option>
-                <option value="three">3x</option>
+                <option value="three">3×</option>
               </select>
               <ChevronDown size={13} aria-hidden="true" />
             </span>
@@ -604,9 +673,9 @@ export default function GifMaker() {
           <div className="compact-control size-control">
             <span>Size</span>
             <div>
-              <input aria-label="Output width" type="number" min="1" max="8192" value={width} onChange={(event) => updateWidth(Number(event.target.value))} />
+              <input aria-label="Output width" type="number" inputMode="numeric" enterKeyHint="done" min="1" max="8192" value={width} onChange={(event) => updateWidth(Number(event.target.value))} />
               <i>×</i>
-              <input aria-label="Output height" type="number" min="1" max="8192" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
+              <input aria-label="Output height" type="number" inputMode="numeric" enterKeyHint="done" min="1" max="8192" value={height} onChange={(event) => updateHeight(Number(event.target.value))} />
               <button type="button" onClick={toggleLock} aria-label={locked ? "Unlock aspect ratio" : "Lock aspect ratio"}>
                 {locked ? <Lock size={11} /> : <Unlock size={11} />}
               </button>
@@ -636,6 +705,12 @@ export default function GifMaker() {
               <ChevronDown size={13} aria-hidden="true" />
             </span>
           </label>
+
+          <p className="credits">
+            Encoded with <a href="https://gif.ski" target="_blank" rel="noreferrer">Gifski</a> via{" "}
+            <a href="https://github.com/jamsinclair/gifski-wasm" target="_blank" rel="noreferrer">gifski-wasm</a>{" "}
+            (<a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">AGPL-3.0</a>).
+          </p>
         </div>
       </section>
 
