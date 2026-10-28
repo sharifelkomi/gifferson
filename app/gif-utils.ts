@@ -29,6 +29,16 @@ function uid() {
 
 // Timeline cards are 106px tall; twice that stays sharp on retina screens.
 const THUMB_HEIGHT = 212;
+// Larger photos (24MP and 48MP phone shots) are stored at this long edge. It
+// stays inside Safari's 16.7M-pixel canvas limit and above any useful GIF size.
+const MAX_SOURCE_EDGE = 4096;
+
+// Safari counts canvas memory until a canvas is garbage collected, and past
+// its budget new canvases silently fail, so finished canvases are emptied.
+function releaseCanvas(canvas: HTMLCanvasElement) {
+  canvas.width = 0;
+  canvas.height = 0;
+}
 
 function canvasToBlob(canvas: HTMLCanvasElement, type = "image/png", quality?: number) {
   return new Promise<Blob>((resolve, reject) => {
@@ -61,7 +71,7 @@ async function drawThumbnail(
   return URL.createObjectURL(await canvasToBlob(canvas, "image/webp", 0.85));
 }
 
-async function staticThumbnail(file: File, image: HTMLImageElement, url: string) {
+async function staticThumbnail(file: Blob, image: HTMLImageElement, url: string) {
   const { naturalWidth: width, naturalHeight: height } = image;
   if (height <= THUMB_HEIGHT) return url;
   let bitmap: ImageBitmap | null = null;
@@ -71,28 +81,64 @@ async function staticThumbnail(file: File, image: HTMLImageElement, url: string)
   } catch {
     // Fall back to drawing the already decoded image.
   }
+  const canvas = document.createElement("canvas");
   try {
-    return await drawThumbnail(document.createElement("canvas"), bitmap ?? image, width, height);
+    return await drawThumbnail(canvas, bitmap ?? image, width, height);
   } catch {
     return url;
   } finally {
     bitmap?.close();
+    releaseCanvas(canvas);
+  }
+}
+
+// Redraws an oversized image at MAX_SOURCE_EDGE so later previews and exports
+// never decode the full-resolution original. Drawing the decoded <img> keeps
+// the EXIF orientation the browser already applied.
+async function downscaleImage(file: File, image: HTMLImageElement) {
+  const scale = MAX_SOURCE_EDGE / Math.max(image.naturalWidth, image.naturalHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  try {
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This image is too large to open.");
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const type = file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+    const blob = await canvasToBlob(canvas, type, 0.92);
+    return { blob, width: canvas.width, height: canvas.height };
+  } finally {
+    releaseCanvas(canvas);
   }
 }
 
 async function decodeStaticImage(file: File): Promise<GifFrame[]> {
-  const url = URL.createObjectURL(file);
+  let url = URL.createObjectURL(file);
   try {
-    const image = new Image();
+    let image = new Image();
     image.decoding = "async";
     image.src = url;
     await image.decode();
+
+    let source: Blob = file;
+    if (Math.max(image.naturalWidth, image.naturalHeight) > MAX_SOURCE_EDGE) {
+      const scaled = await downscaleImage(file, image);
+      URL.revokeObjectURL(url);
+      url = URL.createObjectURL(scaled.blob);
+      source = scaled.blob;
+      image = new Image();
+      image.decoding = "async";
+      image.src = url;
+      await image.decode();
+    }
+
     return [
       {
         id: uid(),
         name: file.name.replace(/\.[^.]+$/, ""),
         url,
-        thumbUrl: await staticThumbnail(file, image, url),
+        thumbUrl: await staticThumbnail(source, image, url),
         width: image.naturalWidth,
         height: image.naturalHeight,
         duration: 0.5,
@@ -172,6 +218,10 @@ async function decodeAnimatedGif(file: File): Promise<GifFrame[]> {
   } catch (error) {
     result.forEach(revokeFrameUrls);
     throw error;
+  } finally {
+    releaseCanvas(canvas);
+    releaseCanvas(patchCanvas);
+    releaseCanvas(thumbCanvas);
   }
 
   return result;
@@ -247,33 +297,71 @@ type ExportOptions = {
   onProgress: (progress: number) => void;
 };
 
-export async function encodeGif(options: ExportOptions): Promise<Blob> {
-  const { frames, width, height, fit, loop, quality, onProgress } = options;
-  if (!frames.length) throw new Error("Add at least one frame first.");
-  if (width < 1 || height < 1) throw new Error("Choose a valid export size.");
+// Every iOS browser and desktop Safari run WebKit, where gifski-wasm's thread
+// pool either throws while starting or deadlocks, so they use the
+// single-threaded build with smaller batches.
+function isWebKit() {
+  const ua = navigator.userAgent;
+  return /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|Android/.test(ua);
+}
 
+// The worker has to start the encoder within INIT_TIMEOUT and then report
+// progress at least every STALL_TIMEOUT; otherwise it is treated as stuck.
+// One batch is the longest silent stretch, and it takes seconds, not minutes.
+const INIT_TIMEOUT = 20_000;
+const STALL_TIMEOUT = 120_000;
+
+// Failures where retrying with the single-threaded encoder can help.
+class EncoderFailure extends Error {}
+
+type EncoderSettings = {
+  threads: boolean;
+  batchPixels: number;
+  repeat: number;
+  quality: number;
+};
+
+function runEncoder(options: ExportOptions, settings: EncoderSettings): Promise<Blob> {
+  const { frames, width, height, fit, onProgress } = options;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("Your browser could not create the export canvas.");
+  if (!context) {
+    releaseCanvas(canvas);
+    return Promise.reject(new Error("This size is too large for your browser. Try a smaller size."));
+  }
 
   const worker = new Worker(new URL("./gif-worker.ts", import.meta.url), {
     type: "module",
   });
-  // gifski-wasm: -1 writes a loop count of 0 (repeat forever) and 0 writes no
-  // loop extension (play once).
-  const repeat = loop === "forever" ? -1 : 0;
-  // Gifski's quality scale is nearly flat above ~80 (85 is only ~2% smaller
-  // than 100), so the lighter presets sit lower to make a real difference.
-  const gifskiQuality = quality === "best" ? 100 : quality === "balanced" ? 60 : 40;
 
   return new Promise<Blob>((resolve, reject) => {
     let nextFrame = 0;
+    let settled = false;
+    let watchdog = 0;
+
+    const finish = () => {
+      settled = true;
+      window.clearTimeout(watchdog);
+      worker.terminate();
+      releaseCanvas(canvas);
+    };
 
     const fail = (error: unknown) => {
-      worker.terminate();
+      if (settled) return;
+      finish();
       reject(error instanceof Error ? error : new Error("GIF encoding failed."));
+    };
+
+    // A hidden tab can be paused by the browser, so it only counts as stuck
+    // once it has been silent while visible.
+    const armWatchdog = (timeout: number) => {
+      window.clearTimeout(watchdog);
+      watchdog = window.setTimeout(() => {
+        if (document.hidden) armWatchdog(timeout);
+        else fail(new EncoderFailure("The encoder stopped responding."));
+      }, timeout);
     };
 
     const sendNextFrame = async () => {
@@ -301,8 +389,11 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
       }
     };
 
-    worker.onerror = () => fail(new Error("The browser encoder stopped unexpectedly."));
+    worker.onerror = () => fail(new EncoderFailure("The browser encoder stopped unexpectedly."));
+    worker.onmessageerror = () => fail(new EncoderFailure("The browser encoder stopped unexpectedly."));
     worker.onmessage = (event) => {
+      if (settled) return;
+      armWatchdog(STALL_TIMEOUT);
       const message = event.data as {
         type: string;
         index?: number;
@@ -319,25 +410,63 @@ export async function encodeGif(options: ExportOptions): Promise<Blob> {
       } else if (message.type === "encoding") {
         onProgress(0.92);
       } else if (message.type === "complete" && message.buffer) {
-        worker.terminate();
+        finish();
         resolve(new Blob([message.buffer], { type: "image/gif" }));
       } else if (message.type === "error") {
         // WASM traps (usually running out of memory) surface as bare
         // "unreachable" or "memory access out of bounds" messages.
         const isWasmTrap = /unreachable|out of bounds|memory/i.test(message.message ?? "");
-        fail(new Error(isWasmTrap
-          ? "This GIF is too big to make in the browser. Try a smaller size or fewer frames."
-          : message.message || "GIF encoding failed."));
+        fail(isWasmTrap
+          ? new EncoderFailure("This GIF is too big to make in the browser. Try a smaller size or fewer frames.")
+          : new Error(message.message || "GIF encoding failed."));
       }
     };
 
+    armWatchdog(INIT_TIMEOUT);
     worker.postMessage({
       type: "start",
       width,
       height,
       frameCount: frames.length,
-      repeat,
-      quality: gifskiQuality,
+      ...settings,
     });
   });
+}
+
+export async function encodeGif(options: ExportOptions): Promise<Blob> {
+  const { frames, width, height, loop, quality, onProgress } = options;
+  if (!frames.length) throw new Error("Add at least one frame first.");
+  if (width < 1 || height < 1) throw new Error("Choose a valid export size.");
+
+  const webKit = isWebKit();
+  const settings: EncoderSettings = {
+    threads: !webKit,
+    batchPixels: webKit ? 8_000_000 : 16_000_000,
+    // gifski-wasm: -1 writes a loop count of 0 (repeat forever) and 0 writes
+    // no loop extension (play once).
+    repeat: loop === "forever" ? -1 : 0,
+    // Gifski's quality scale is nearly flat above ~80 (85 is only ~2% smaller
+    // than 100), so the lighter presets sit lower to make a real difference.
+    quality: quality === "best" ? 100 : quality === "balanced" ? 60 : 40,
+  };
+
+  if (settings.threads) {
+    try {
+      return await runEncoder(options, settings);
+    } catch (error) {
+      if (!(error instanceof EncoderFailure)) throw error;
+      // The threaded encoder failed or stalled. The single-threaded one is
+      // slower but does not depend on the thread pool.
+      onProgress(0);
+    }
+  }
+
+  try {
+    return await runEncoder(options, { ...settings, threads: false });
+  } catch (error) {
+    if (error instanceof EncoderFailure && error.message === "The encoder stopped responding.") {
+      throw new Error("The export stopped responding. Try a smaller size or fewer frames.");
+    }
+    throw error;
+  }
 }

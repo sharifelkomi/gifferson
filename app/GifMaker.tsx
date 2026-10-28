@@ -41,6 +41,9 @@ import Wordmark from "./Wordmark";
 
 const ACCEPTED_FILES = "image/png,image/jpeg,image/webp,image/gif,image/bmp";
 const UNDO_TIMEOUT = 8000;
+// The size picked from the first frame fits this long edge. Phone photos are
+// 4000px or more, which makes huge, slow GIFs; larger sizes can still be typed.
+const MAX_AUTO_EDGE = 1920;
 
 type PendingClear = { frames: GifFrame[]; selectedId: string | null; clearedAt: number };
 
@@ -311,8 +314,9 @@ export default function GifMaker() {
         setFrames((current) => [...current, ...nextFrames]);
         setSelectedId((current) => current ?? nextFrames[0].id);
         if (shouldApplyDetectedSize) {
-          const detectedWidth = nextFrames[0].width;
-          const detectedHeight = nextFrames[0].height;
+          const scale = Math.min(1, MAX_AUTO_EDGE / Math.max(nextFrames[0].width, nextFrames[0].height));
+          const detectedWidth = Math.max(1, Math.round(nextFrames[0].width * scale));
+          const detectedHeight = Math.max(1, Math.round(nextFrames[0].height * scale));
           setWidth(detectedWidth);
           setHeight(detectedHeight);
           setLockedRatio(detectedWidth / Math.max(1, detectedHeight));
