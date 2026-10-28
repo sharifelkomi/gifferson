@@ -767,7 +767,6 @@ export default function GifMaker() {
               <select value={loop} onChange={(event) => setLoop(event.target.value as LoopMode)}>
                 <option value="forever">Infinite</option>
                 <option value="once">Once</option>
-                <option value="three">3×</option>
               </select>
               <ChevronDown size={13} aria-hidden="true" />
             </span>
