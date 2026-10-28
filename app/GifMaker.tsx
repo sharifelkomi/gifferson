@@ -511,6 +511,8 @@ export default function GifMaker() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Bump the all-time export count. It must never affect the export.
+      void fetch("/api/exports", { method: "POST", keepalive: true }).catch(() => {});
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : "GIF export failed.");
     } finally {
@@ -809,10 +811,15 @@ export default function GifMaker() {
           </label>
 
           <p className="credits">
-            Encoded with <a href="https://gif.ski" target="_blank" rel="noreferrer">Gifski</a> via{" "}
-            <a href="https://github.com/jamsinclair/gifski-wasm" target="_blank" rel="noreferrer">gifski-wasm</a>{" "}
-            (<a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">AGPL-3.0</a>).{" "}
-            <a href="https://github.com/sharifelkomi/gifferson" target="_blank" rel="noreferrer">Source</a>.
+            <span>
+              Encoded with <a href="https://gif.ski" target="_blank" rel="noreferrer">Gifski</a> via{" "}
+              <a href="https://github.com/jamsinclair/gifski-wasm" target="_blank" rel="noreferrer">gifski-wasm</a>{" "}
+              (<a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">AGPL-3.0</a>).
+            </span>{" "}
+            <span>
+              <a href="https://github.com/sharifelkomi/gifferson" target="_blank" rel="noreferrer">Source</a>. Built by{" "}
+              <a href="https://sharifelkomi.com" target="_blank" rel="noopener">Sharif</a>.
+            </span>
           </p>
         </div>
       </section>

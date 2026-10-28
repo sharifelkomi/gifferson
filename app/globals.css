@@ -1284,6 +1284,10 @@ a:focus-visible {
   font-size: 12px;
   line-height: 1.4;
   margin: 0 0 8px auto;
+}
+
+/* Each half stays on one line; narrow screens wrap between them. */
+.credits span {
   white-space: nowrap;
 }
 
